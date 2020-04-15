@@ -1,4 +1,5 @@
 from fuzzywuzzy import fuzz
+import re
 from fuzzywuzzy import process
 import random
 
@@ -11,7 +12,7 @@ AVERAGE_MIN = 70
 PROB_MIN = 0.7
 
 
-class ResponseHandler(object):
+class ResponseHandler:
     responseFile = ""
     botNoResponse = ""
 
@@ -19,7 +20,7 @@ class ResponseHandler(object):
         self.responseFile = responseFile
         self.botNoResponse = botNoResponse
 
-    async def addResponse(responseFile, newTrigger, newResponse):
+    async def addResponse(self, responseFile, newTrigger, newResponse):
         triggerMatch = False
         with open(responseFile, 'r') as responses:
             lines = responses.readlines()
@@ -29,7 +30,7 @@ class ResponseHandler(object):
             trigger = words[0]
 
             # add new response to trigger
-            if fuzzyMatchString(trigger, newTrigger)[0]:
+            if self.fuzzyMatchString(trigger, newTrigger)[0]:
                 lines[i] = lines[i].strip()
                 lines[i] += SPLIT_CHAR + newResponse + '\n'
                 triggerMatch = True
@@ -43,7 +44,7 @@ class ResponseHandler(object):
                 responses.write('\n' + newTrigger + SPLIT_CHAR + newResponse)
                 print("Added new trigger/response \"" + newTrigger + "\"/\"" + newResponse + "\"")
 
-    async def getResponse(responseFile, message):
+    async def getResponse(self, responseFile, message):
         # get trigger
         triggerList = str(message.content).split()[1:]
         trigger = ""
@@ -67,38 +68,42 @@ class ResponseHandler(object):
                     response = random.choice(responses)
                     return response
 
-        return STR_NO_RESPONSE
+        return self.botNoResponse
 
-    # match strings with fuzzywuzzy
-    def fuzzyMatchString(str1, str2):
-        partialRatio = fuzz.partial_ratio(str1, str2)
-        tokenSetRatio = fuzz.token_set_ratio(str1, str2)
-        tokenSortRatio = fuzz.token_sort_ratio(str1, str2)
-        ratio = fuzz.ratio(str1, str2)
-        partialTokenSetRatio = fuzz.partial_token_set_ratio(str1, str2)
-        partialTokenSortRatio = fuzz.partial_token_sort_ratio(str1, str2)
 
-        scores = [ratio, partialRatio, tokenSetRatio, tokenSortRatio]
-        weights = (1.2, 0.8, 1.1, 1)
+def sanitize_string(input):
+    return re.sub(r'[^a-zA-Z ]', '', str(input).strip().lower())
 
-        sumScores = 0
-        for i in range(len(scores)):
-            sumScores += (scores[i] / 100) * weights[i]
 
-        probability = sumScores / len(scores)
+# match strings with fuzzywuzzy
+def fuzzyMatchString(str1, str2, weights=(1.2,0.7,1.1,1)):
+    partialRatio = fuzz.partial_ratio(str1, str2)
+    tokenSetRatio = fuzz.token_set_ratio(str1, str2)
+    tokenSortRatio = fuzz.token_sort_ratio(str1, str2)
+    ratio = fuzz.ratio(str1, str2)
+    partialTokenSetRatio = fuzz.partial_token_set_ratio(str1, str2)
+    partialTokenSortRatio = fuzz.partial_token_sort_ratio(str1, str2)
 
-        isMatch = False
-        if probability > PROB_MIN:
-            isMatch = True
+    scores = [ratio, partialRatio, tokenSetRatio, tokenSortRatio]
 
-        print("Analysis of \"", str1, "\" with \"", str2, "\" \n",
-              "Matched? ", isMatch, "\n",
-              "Partial ratio: ", partialRatio, "\n",
-              "Ratio: ", ratio, "\n",
-              "Token set ratio: ", tokenSetRatio, "\n",
-              "Token sort ratio: ", tokenSortRatio, "\n",
-              "Partial token set ratio: ", partialTokenSetRatio, "\n",
-              "Partial token sort ratio: ", partialTokenSortRatio, "\n",
-              "Probability: ", probability)
+    sumScores = 0
+    for i in range(len(scores)):
+        sumScores += (scores[i] / 100) * weights[i]
 
-        return isMatch, partialRatio, ratio  # return tuple of values
+    probability = sumScores / len(scores)
+
+    isMatch = False
+    if probability > PROB_MIN:
+        isMatch = True
+
+    print("Analysis of \"", str1, "\" with \"", str2, "\" \n",
+          "Matched? ", isMatch, "\n",
+          "Partial ratio: ", partialRatio, "\n",
+          "Ratio: ", ratio, "\n",
+          "Token set ratio: ", tokenSetRatio, "\n",
+          "Token sort ratio: ", tokenSortRatio, "\n",
+          "Partial token set ratio: ", partialTokenSetRatio, "\n",
+          "Partial token sort ratio: ", partialTokenSortRatio, "\n",
+          "Probability: ", probability)
+
+    return isMatch, partialRatio, ratio  # return tuple of values

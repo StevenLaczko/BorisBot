@@ -116,8 +116,5 @@ async def on_error(event, *args, **kwargs):
             raise
 
 
-def sanitize_string(input):
-    return re.sub(r'[^a-zA-Z ]', '', str(input).strip().lower())
-
 
 bot.run(TOKEN)
