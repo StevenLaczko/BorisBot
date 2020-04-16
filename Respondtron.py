@@ -1,5 +1,7 @@
 from fuzzywuzzy import fuzz
 import re
+import discord
+from discord.ext import commands
 from fuzzywuzzy import process
 import random
 
@@ -8,17 +10,57 @@ PARTIAL_RATIO_MIN = 70
 RATIO_MIN = 60
 TOKEN_SET_MIN = 70
 TOKEN_SORT_MIN = 70
-AVERAGE_MIN = 70
 PROB_MIN = 0.7
 
 
-class ResponseHandler:
+class Respondtron(commands.Cog):
     responseFile = ""
     botNoResponse = ""
 
-    def __init__(self, responseFile, botNoResponse):
+    def __init__(self, bot, responseFile, botNoResponse, weights=(1.2, 0.7, 1.1, 1), probMin=0.7):
+        self.bot = bot
         self.responseFile = responseFile
         self.botNoResponse = botNoResponse
+        self.weights = weights
+        self.probMin = probMin
+
+    # on_message listens for incoming messages starting with an @(botname) and then response to them
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        mentionIDList = []
+        for mention in message.mentions:
+            mentionIDList.append(mention.id)
+        botID = self.bot.user.id
+        if botID in mentionIDList:
+            print(self.bot.user.name + " mention DETECTED")
+
+            # get and send response
+            response = await self.getResponse(self.responseFile, message)
+            if response is not None:
+                print("Response: " + response)
+                await message.channel.send(response)
+            else:
+                await message.channel.send(self.botNoResponse)
+
+    # teach
+    # teach allows the bot to learn new trigger/response pairs
+    @commands.command(name='teach', help='Usage: ~teach \"Trigger phrase\" \"Desired response\"')
+    async def teach(self, ctx, *args):
+        # take in and sanitize trigger
+        iterargs = iter(args)
+        trigger = str(next(iterargs))
+        print("Trigger: " + trigger)
+        trigger = re.sub(r'[^a-zA-Z ]', '', str(trigger).strip().lower())
+
+        response = str(next(iterargs)) + ' '
+        for arg in iterargs:
+            print("Arg: " + str(arg))
+            response += str(arg) + ' '
+        response = response.strip()
+        print("Learning to respond to \"" + trigger + "\" with \"" + response + '\"')
+        await ctx.send("Learned to respond to \"" + trigger + "\" with \"" + response + '\"')
+
+        await self.addResponse(self.responseFile, trigger, response)
 
     async def addResponse(self, responseFile, newTrigger, newResponse):
         triggerMatch = False
@@ -30,7 +72,7 @@ class ResponseHandler:
             trigger = words[0]
 
             # add new response to trigger
-            if self.fuzzyMatchString(trigger, newTrigger)[0]:
+            if self.fuzzyMatchString(trigger, newTrigger, self.weights, self.probMin)[0]:
                 lines[i] = lines[i].strip()
                 lines[i] += SPLIT_CHAR + newResponse + '\n'
                 triggerMatch = True
@@ -63,7 +105,7 @@ class ResponseHandler:
                 lineTrigger = entries[0]
 
                 # add new response to trigger
-                if fuzzyMatchString(trigger, lineTrigger)[0]:
+                if fuzzyMatchString(trigger, lineTrigger, self.weights, self.probMin)[0]:
                     responses = entries[1:]
                     response = random.choice(responses)
                     return response
@@ -76,7 +118,7 @@ def sanitize_string(input):
 
 
 # match strings with fuzzywuzzy
-def fuzzyMatchString(str1, str2, weights=(1.2,0.7,1.1,1)):
+def fuzzyMatchString(str1, str2, weights, probMin):
     partialRatio = fuzz.partial_ratio(str1, str2)
     tokenSetRatio = fuzz.token_set_ratio(str1, str2)
     tokenSortRatio = fuzz.token_sort_ratio(str1, str2)
@@ -93,7 +135,7 @@ def fuzzyMatchString(str1, str2, weights=(1.2,0.7,1.1,1)):
     probability = sumScores / len(scores)
 
     isMatch = False
-    if probability > PROB_MIN:
+    if probability > probMin:
         isMatch = True
 
     print("Analysis of \"", str1, "\" with \"", str2, "\" \n",

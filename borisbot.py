@@ -3,7 +3,7 @@ import os
 import discord
 import re
 import random
-import ResponseHandler
+import Respondtron
 from discord.ext import commands
 
 TOKEN_FILE = ".token"
@@ -11,13 +11,15 @@ BOT_PREFIX = ('<@698354966078947338>', '~', '<@!698354966078947338>', '<@&698361
 STR_NO_RESPONSE = "Look, I'm not all that bright. \nType ~help teach and teach me some new phrases, would ya?"
 botDict = 'responses.txt'
 botNoResponse = "Use ~teach \"Trigger\" \"Response\" to teach me how to respond to something!"
+WEIGHTS = (1.2, 0.7, 1.1, 1)
+PROB_MIN = 0.8
 
 with open(TOKEN_FILE, 'r') as tokenFile:
     TOKEN = tokenFile.read()
 
 client = discord.Client()
 bot = commands.Bot(command_prefix=BOT_PREFIX)
-resHand = ResponseHandler.ResponseHandler(botDict, botNoResponse)
+respTron = Respondtron.Respondtron
 
 
 @bot.command(name='hi')
@@ -45,25 +47,6 @@ async def plan(ctx):
             await msg.add_reaction(dayReaction)
 
 
-@bot.command(name='teach', help='Usage: ~teach \"Trigger phrase\" \"Desired response\"')
-async def teach(ctx, *args):
-    # take in and sanitize trigger
-    iterargs = iter(args)
-    trigger = str(next(iterargs))
-    print("Trigger: " + trigger)
-    trigger = re.sub(r'[^a-zA-Z ]', '', str(trigger).strip().lower())
-
-    response = str(next(iterargs)) + ' '
-    for arg in iterargs:
-        print("Arg: " + str(arg))
-        response += str(arg) + ' '
-    response = response.strip()
-    print("Learning to respond to \"" + trigger + "\" with \"" + response + '\"')
-    await ctx.send("Learned to respond to \"" + trigger + "\" with \"" + response + '\"')
-
-    await resHand.addResponse(botDict, trigger, response)
-
-
 @bot.event
 async def on_ready():
     print("Boris has connected to Discord!")
@@ -74,21 +57,6 @@ async def on_message(message):
     print(message.content)
     if message.author == client.user:
         return
-
-    mentionIDList = []
-    for mention in message.mentions:
-        mentionIDList.append(mention.id)
-    botID = bot.user.id
-    if botID in mentionIDList:
-        print("Boris mention DETECTED")
-
-        # get and send response
-        response = await resHand.getResponse(botDict, message)
-        if response is not None:
-            print("Response: " + response)
-            await send_message(message.channel.id, response)
-        else:
-            await send_message(message.channel.id, botNoResponse)
 
     if message.content == 'raise-exception':
         raise discord.DiscordException
@@ -116,5 +84,6 @@ async def on_error(event, *args, **kwargs):
             raise
 
 
-
+respTron = Respondtron.Respondtron(bot, botDict, botNoResponse, WEIGHTS, PROB_MIN)
+bot.add_cog(respTron)
 bot.run(TOKEN)
