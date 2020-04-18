@@ -11,8 +11,8 @@ BOT_PREFIX = ('<@698354966078947338>', '~', '<@!698354966078947338>', '<@&698361
 STR_NO_RESPONSE = "Look, I'm not all that bright. \nType ~help teach and teach me some new phrases, would ya?"
 botDict = 'responses.txt'
 botNoResponse = "Use ~teach \"Trigger\" \"Response\" to teach me how to respond to something!"
-WEIGHTS = (1.2, 0.7, 1.1, 1)
-PROB_MIN = 0.8
+WEIGHTS = [1.2, 0.7, 1.1, 1]
+PROB_MIN = 0.7
 
 with open(TOKEN_FILE, 'r') as tokenFile:
     TOKEN = tokenFile.read()
@@ -66,7 +66,7 @@ async def on_message(message):
 
 @bot.event
 async def on_member_join(member):
-    send_message(658114649081774093, "<@!" + member.id + "> :gunworm:")
+    await send_message(658114649081774093, "<@!" + member.id + "> :gunworm:")
 
 
 async def send_message(channelID, message):
@@ -79,11 +79,15 @@ async def on_error(event, *args, **kwargs):
     with open('err.log', 'a') as f:
         if event == 'on_message':
             f.write("Unhandled message: " + str(args[0]) + "\n")
-            await send_message(696863794743345152, args[1])
+            #await send_message(696863794743345152, args[0])
         else:
             raise
 
 
-respTron = Respondtron.Respondtron(bot, botDict, botNoResponse, WEIGHTS, PROB_MIN)
+args = {Respondtron.ARGS.WEIGHTS: WEIGHTS,
+        Respondtron.ARGS.PROB_MIN: PROB_MIN,
+        Respondtron.ARGS.DEBUG_CHANNEL_ID: 696863794743345152,
+        Respondtron.ARGS.ENABLE_AUTO_WEIGHTS: True}
+respTron = Respondtron.Respondtron(bot, botDict, botNoResponse)
 bot.add_cog(respTron)
 bot.run(TOKEN)
