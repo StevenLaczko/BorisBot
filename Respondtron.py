@@ -1,7 +1,6 @@
-from fuzzywuzzy import fuzz
+import StringMatchHelp
 import re
 import sys
-import discord
 from discord.ext import commands
 from enum import Enum, auto
 import random
@@ -33,8 +32,7 @@ BAD_VOTE = "bad"
 SETTINGS_FILE = "settings"
 
 
-# TODO
-# Add undo (at least to addResponse)
+# TODO Add undo (at least to addResponse)
 class Respondtron(commands.Cog):
     responseFile = ""
     botNoResponse = ""
@@ -100,14 +98,16 @@ class Respondtron(commands.Cog):
     # on_message listens for incoming messages starting with an @(botname) and then responds to them
     @commands.Cog.listener()
     async def on_message(self, message):
-        # add response prompt
+        # Boris responding to messages when he was waiting for input from someone
+        # TODO allow multiple users to do this at once. Currently only allows one, as it uses tempArgs[0] for the user's name
         if self.state == STATES.AWAITING_INPUT and message.author == self.tempArgs[0]:
+            # If the trigger/response was correct, add the response
             if message.content == "y":
                 self.addTempResponse(self.tempArgs)
                 self.state = STATES.NOMINAL
-                await message.channel.send("Response Learnt.")
+                await message.add_reaction('✅')
             elif message.content == "n":
-                await message.channel.send("Response addin' cancelled.")
+                await message.add_reaction('❌')
                 self.state = STATES.NOMINAL
 
         mentionIDList = []
@@ -155,13 +155,14 @@ class Respondtron(commands.Cog):
         if await self.addResponse(ctx, self.responseFile, trigger, response) is False:
             await ctx.send("I've already learned that, friend!")
 
-    @commands.command(name="setProb", help="Usage: ~setProb [0.0-1.0]\nSets the sensitivity for matching triggers.")
+    @commands.command(name="setProb", help="Usage: ~setProb [0.0-1.0]\nSets the sensitivity for matching triggers.",
+                      hidden=True)
     async def setProbCommand(self, ctx, prob):
         if ctx.guild.get_role(ADMIN_ROLE_ID) in ctx.message.author.roles:
             await self.setProb(prob)
             return
 
-    @commands.command(name="setWeights")
+    @commands.command(name="setWeights", hidden=True)
     async def setWeightCommand(self, ctx, *weights):
         if ctx.guild.get_role(ADMIN_ROLE_ID) in ctx.message.author.roles:
             # convert weights to floats
@@ -179,7 +180,7 @@ class Respondtron(commands.Cog):
                 await ctx.send("Bad input, bud. Comma separated and between 0 and 1, please.")
             return
 
-    @commands.command(name="saveSettings")
+    @commands.command(name="saveSettings", hidden=True)
     async def saveSettingsCommand(self, ctx):
         if ctx.guild.get_role(ADMIN_ROLE_ID) in ctx.message.author.roles:
             self.saveSettings(self.settings, SETTINGS_FILE)
@@ -207,7 +208,7 @@ class Respondtron(commands.Cog):
         self.lastRated = True
         await ctx.send("Response rated. Gimme time, I'm learnin'.")
 
-    @commands.command(name="weights")
+    @commands.command(name="weights", help="Sends weights as a message", hidden=True)
     async def weightsCommand(self, ctx):
         await ctx.send(self.settings[ARGS.WEIGHTS])
 
@@ -292,7 +293,8 @@ class Respondtron(commands.Cog):
         # if the trigger was not in the file before, make a new trigger+response
         else:
             self.prepPrompt(ctx.message.author, newTrigger, newResponse)
-            await ctx.send("Adding new trigger/response \"" + newTrigger + "\"/\"" + newResponse + "\"\nIs this correct? (y/n)")
+            await ctx.send(
+                "Adding new trigger/response \"" + newTrigger + "\"/\"" + newResponse + "\"\nIs this correct? (y/n)")
             return True
 
     def prepPrompt(self, *args):
@@ -307,7 +309,7 @@ class Respondtron(commands.Cog):
             newResponse = args[2]
             with open(self.responseFile, 'a') as responses:
                 print("Adding new trigger/response.\n Trigger: ", newTrigger)
-                responses.write(newTrigger + SPLIT_CHAR + newResponse)
+                responses.write(newTrigger + SPLIT_CHAR + newResponse + "\n")
 
         elif len(args) == 2:
             lines = self.tempArgs[1]
@@ -321,7 +323,7 @@ class Respondtron(commands.Cog):
         trigger = ""
         for word in triggerList:
             trigger += word + ' '
-        trigger = sanitize_string(trigger)
+        trigger = StringMatchHelp.sanitize_string(trigger)
 
         # open file of responses
         with open(responseFile, 'r') as responseFile:
@@ -356,48 +358,10 @@ class Respondtron(commands.Cog):
         return self.botNoResponse
 
     async def botMatchString(self, str1, str2):
-        args = fuzzyMatchString(str1, str2, self.settings[ARGS.WEIGHTS], self.settings[ARGS.PROB_MIN])
+        args = StringMatchHelp.fuzzyMatchString(str1, str2, self.settings[ARGS.WEIGHTS], self.settings[ARGS.PROB_MIN])
         self.lastScores = args[2]
         if args[3] is not None: print(args[2])
         return args[0:2]
-
-
-def sanitize_string(input):
-    return re.sub(r'[^a-zA-Z ]', '', str(input).strip().lower())
-
-
-# match strings with fuzzywuzzy
-def fuzzyMatchString(str1, str2, weights, probMin):
-    output = None
-    partialRatio = fuzz.partial_ratio(str1, str2)
-    tokenSetRatio = fuzz.token_set_ratio(str1, str2)
-    tokenSortRatio = fuzz.token_sort_ratio(str1, str2)
-    ratio = fuzz.ratio(str1, str2)
-    # partialTokenSetRatio = fuzz.partial_token_set_ratio(str1, str2)
-    # partialTokenSortRatio = fuzz.partial_token_sort_ratio(str1, str2)
-
-    scores = [ratio, partialRatio, tokenSetRatio, tokenSortRatio]
-
-    # weight scores as probabilities, sum them, and divide by number of scores
-    sumScores = 0
-    for i in range(len(scores)):
-        sumScores += (scores[i] / 100) * weights[i]
-
-    probability = sumScores / len(scores)
-
-    isMatch = False
-    if probability > probMin:
-        isMatch = True
-
-        output = "Analysis of \"", str(str1), "\" with \"", str(str2), "\" \n", \
-                 "Matched? ", str(isMatch), "\n", \
-                 "Partial ratio: ", str(partialRatio), "\n", \
-                 "Ratio: ", str(ratio), "\n", \
-                 "Token set ratio: ", str(tokenSetRatio), "\n", \
-                 "Token sort ratio: ", str(tokenSortRatio), "\n", \
-                 "Probability: ", str(probability)
-
-    return isMatch, probability, scores, output  # return matching status and individual scores
 
 
 def save_obj(obj, name):

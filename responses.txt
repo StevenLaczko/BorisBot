@@ -31,3 +31,6 @@ start the coup	Yessir. Troops deploying. Nukes engaged.
 hows it goin	Just... fantabulously good! Great weather over 'ere. In 'ere. On... 'ere. This server.
 right	That's right, son.
 invite krieger over	He's already on his way.	I already did today, for some tea, but he's not feeling up to it.
+u good	I'm good...! 😅  Real good!
+lol u	I am identical in every way!
+friends with luna	!trackme
