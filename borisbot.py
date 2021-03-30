@@ -4,6 +4,7 @@ import discord
 import re
 import random
 import Respondtron
+import MemeGrabber
 from discord.ext import commands
 
 TOKEN_FILE = ".token"
@@ -89,5 +90,7 @@ args = {Respondtron.ARGS.WEIGHTS: WEIGHTS,
         Respondtron.ARGS.DEBUG_CHANNEL_ID: 696863794743345152,
         Respondtron.ARGS.ENABLE_AUTO_WEIGHTS: True}
 respTron = Respondtron.Respondtron(bot, botDict, botNoResponse)
+memeGrabber = MemeGrabber.MemeGrabber(bot)
 bot.add_cog(respTron)
+bot.add_cog(memeGrabber)
 bot.run(TOKEN)
