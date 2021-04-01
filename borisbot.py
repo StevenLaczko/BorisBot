@@ -1,6 +1,7 @@
 # borisbot.py
 import os
 import discord
+import GPT_Test
 import re
 import random
 import Respondtron
@@ -89,8 +90,13 @@ args = {Respondtron.ARGS.WEIGHTS: WEIGHTS,
         Respondtron.ARGS.PROB_MIN: PROB_MIN,
         Respondtron.ARGS.DEBUG_CHANNEL_ID: 696863794743345152,
         Respondtron.ARGS.ENABLE_AUTO_WEIGHTS: True}
+
 respTron = Respondtron.Respondtron(bot, botDict, botNoResponse)
-memeGrabber = MemeGrabber.MemeGrabber(bot)
 bot.add_cog(respTron)
+
+memeGrabber = MemeGrabber.MemeGrabber(bot)
 bot.add_cog(memeGrabber)
+
+#gptTest = GPT_Test.GPT_Test(bot)
+#bot.add_cog(gptTest)
 bot.run(TOKEN)
