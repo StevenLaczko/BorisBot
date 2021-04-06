@@ -1,8 +1,6 @@
 from transformers import pipeline, set_seed
-import tensorflow
 import random
 from discord.ext import commands
-import discord
 
 
 class GPT_Test(commands.Cog):
