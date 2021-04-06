@@ -24,7 +24,7 @@ class RemindE(Enum):
     isActive = 5
 
 
-REMINDER_FILE = "reminders.json"
+REMINDER_FILE = "reminders"
 DELAY_CHECK_REMINDERS_SEC = 5
 
 

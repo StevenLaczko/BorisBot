@@ -1,6 +1,5 @@
 import re
 from enum import Enum
-
 from fuzzywuzzy import fuzz
 
 DEF_WEIGHTS = [1.2, 0.7, 1.1, 1]
