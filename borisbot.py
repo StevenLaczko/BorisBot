@@ -1,16 +1,12 @@
-# borisbot.py
-import os
 import discord
-import GPT_Test
 import discord.ext.tasks
-from discord.ext import commands
 import random
+from discord.ext import commands
 
 import Respondtron
 import MafiaCog
 import ReminderCog
 import MemeGrabber
-from discord.ext import commands
 
 TOKEN_FILE = ".token"
 BOT_PREFIX = ('<@698354966078947338>', '~', '<@!698354966078947338>', '<@&698361022712381451>')
@@ -99,14 +95,14 @@ args = {Respondtron.ARGS.WEIGHTS: WEIGHTS,
 respTron = Respondtron.Respondtron(bot, botDict, botNoResponse)
 bot.add_cog(respTron)
 
-#mafiaCog = MafiaCog.Mafia(bot, None, None)
-#bot.add_cog(mafiaCog)
-
 remindCog = ReminderCog.ReminderCog(bot)
 bot.add_cog(remindCog)
 
 memeGrabber = MemeGrabber.MemeGrabber(bot)
 bot.add_cog(memeGrabber)
+
+#mafiaCog = MafiaCog.Mafia(bot, None, None)
+#bot.add_cog(mafiaCog)
 
 #gptTest = GPT_Test.GPT_Test(bot)
 #bot.add_cog(gptTest)
