@@ -7,8 +7,6 @@ from Message import Message
 from Reminder import Reminder
 from ReminderCogHelpers import *
 from typing import List, Dict
-import json
-import os
 
 
 class RemindType(Enum):
@@ -29,9 +27,6 @@ class RemindE(Enum):
 REMINDER_FILE = "reminders.json"
 DELAY_CHECK_REMINDERS_SEC = 5
 
-
-# TODO
-# save and load reminders (should be easy)
 
 class ReminderCog(commands.Cog):
     reminders = {}
