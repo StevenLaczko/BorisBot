@@ -2,9 +2,13 @@
 import os
 import discord
 import GPT_Test
-import re
+import discord.ext.tasks
+from discord.ext import commands
 import random
+
 import Respondtron
+import MafiaCog
+import ReminderCog
 import MemeGrabber
 from discord.ext import commands
 
@@ -15,13 +19,13 @@ botDict = 'responses.txt'
 botNoResponse = "Use ~teach \"Trigger\" \"Response\" to teach me how to respond to something!"
 WEIGHTS = [1.2, 0.7, 1.1, 1]
 PROB_MIN = 0.7
+PLAN_REACTIONS = ['🇫', '🇸', '🌞', '❌']
 
 with open(TOKEN_FILE, 'r') as tokenFile:
     TOKEN = tokenFile.read()
 
 client = discord.Client()
 bot = commands.Bot(command_prefix=BOT_PREFIX)
-respTron = Respondtron.Respondtron
 
 
 @bot.command(name='hi')
@@ -35,12 +39,13 @@ async def hi(ctx):
 
 
 @bot.command(name='plan', help='For planning on the weekend. You sir have to ping everyone, though.')
+@commands.has_role("plannerman")
 async def plan(ctx):
     print("Planning")
 
     msg = await ctx.send("Howdy! Les all gather up and spend some quality time together.\n"
                          "Click them emojis correspondin' to the days you're free.")
-    reactions = ['🇫', '🇸', '🌞']
+    reactions = PLAN_REACTIONS
     # reactions_names = ["regional_indicator_f", "regional_indicator_s", "sun_with_face"]
     # for reaction in reactions_names: reactions.append(discord.utils.get(bot.emojis, name=reaction))
     print(reactions)
@@ -81,7 +86,7 @@ async def on_error(event, *args, **kwargs):
     with open('err.log', 'a') as f:
         if event == 'on_message':
             f.write("Unhandled message: " + str(args[0]) + "\n")
-            #await send_message(696863794743345152, args[0])
+            # await send_message(696863794743345152, args[0])
         else:
             raise
 
@@ -94,9 +99,16 @@ args = {Respondtron.ARGS.WEIGHTS: WEIGHTS,
 respTron = Respondtron.Respondtron(bot, botDict, botNoResponse)
 bot.add_cog(respTron)
 
+#mafiaCog = MafiaCog.Mafia(bot, None, None)
+#bot.add_cog(mafiaCog)
+
+remindCog = ReminderCog.ReminderCog(bot)
+bot.add_cog(remindCog)
+
 memeGrabber = MemeGrabber.MemeGrabber(bot)
 bot.add_cog(memeGrabber)
 
 #gptTest = GPT_Test.GPT_Test(bot)
 #bot.add_cog(gptTest)
+
 bot.run(TOKEN)
