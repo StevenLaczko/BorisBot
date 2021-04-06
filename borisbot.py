@@ -1,13 +1,6 @@
-# borisbot.py
-import asyncio
-import os
-from threading import Thread
-import time
-
 import discord
 import discord.ext.tasks
 from discord.ext import commands
-import re
 import random
 
 import Respondtron
