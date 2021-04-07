@@ -97,12 +97,14 @@ class ReminderCog(commands.Cog):
 
         # todo handle different reminder types (not a message)
 
+
+        self.SaveReminderFile()
+
     # asynchronous loop that runs indefinitely every specified number of seconds
     @tasks.loop(seconds=5.0)
     async def LoopReminders(self):
         await self.bot.wait_until_ready()
         await self.CheckReminders()
-        self.SaveReminderFile()
 
     @LoopReminders.before_loop
     async def Before_LoopReminders(self):
@@ -153,6 +155,8 @@ class ReminderCog(commands.Cog):
 
         if delete:
             del self.reminders[userID][rem_i]
+
+        self.SaveReminderFile()
 
     @commands.command(name="listRem")
     async def ListReminders(self, ctx):

@@ -1,10 +1,7 @@
 import discord
-<<<<<<< Updated upstream
 import discord.ext.tasks
-=======
 #import GPT_Test
 import re
->>>>>>> Stashed changes
 import random
 from discord.ext import commands
 
