@@ -6,7 +6,6 @@ import random
 from discord.ext import commands
 
 import Respondtron
-import MafiaCog
 import ReminderCog
 import MemeGrabber
 
