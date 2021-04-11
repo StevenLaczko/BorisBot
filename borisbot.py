@@ -90,10 +90,14 @@ args = {Respondtron.ARGS.WEIGHTS: WEIGHTS,
         Respondtron.ARGS.PROB_MIN: PROB_MIN,
         Respondtron.ARGS.DEBUG_CHANNEL_ID: 696863794743345152,
         Respondtron.ARGS.ENABLE_AUTO_WEIGHTS: True}
+
 respTron = Respondtron.Respondtron(bot, botDict, botNoResponse)
-#mafiaCog = MafiaCog.Mafia(bot, None, None)
-remindCog = ReminderCog.ReminderCog(bot)
 bot.add_cog(respTron)
+
+mafiaCog = MafiaCog.Mafia(bot, None, None)
 #bot.add_cog(mafiaCog)
+
+remindCog = ReminderCog.ReminderCog(bot)
 bot.add_cog(remindCog)
+
 bot.run(TOKEN)

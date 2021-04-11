@@ -181,7 +181,7 @@ class ReminderCog(commands.Cog):
         # }
 
         # dict of reminders
-        self.reminders =  \
+        self.reminders = \
             {
                 0: [],  # Sample (where u_id = 0):
             }
@@ -208,10 +208,6 @@ class ReminderCog(commands.Cog):
         save_obj(self.reminders, REMINDER_FILE)
         print("Saving reminder file...")
 
-
     """def LoadReminderFile(self, name):
         with open(REMINDER_FILE) as jsonReminders:
             self.reminders = json.load(jsonReminders)"""
-
-
-
