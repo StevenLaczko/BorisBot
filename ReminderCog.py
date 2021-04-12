@@ -5,6 +5,7 @@ from discord import embeds
 from pytz import timezone
 from enum import Enum, auto
 import dateutil.parser
+import traceback
 from Message import Message
 from PriorityQueuePeek import PriorityQueuePeek
 from Reminder import Reminder
@@ -28,7 +29,6 @@ class RemindE(Enum):
 
 
 REMINDER_FILE = "reminders"
-REMINDER_Q_FILE = "reminders_queue"
 DELAY_CHECK_REMINDERS_SEC = 5
 
 
@@ -38,11 +38,8 @@ class ReminderCog(commands.Cog):
     def __init__(self, bot):
         # load reminders from json file
         self.bot = bot
-        try:
-            self.reminders: Dict[int, List[Reminder]] = load_obj(REMINDER_FILE)
-            self.remindersList: PriorityQueuePeek = load_obj(REMINDER_Q_FILE)
-        except FileNotFoundError:
-            self.GenerateReminderFile()
+        self.remindersQueue: PriorityQueuePeek = PriorityQueuePeek()
+        self.LoadReminderFile(REMINDER_FILE)
 
         self.lastSaved = datetime.datetime.now()
         self.LoopReminders.start()
@@ -96,21 +93,19 @@ class ReminderCog(commands.Cog):
                                  Message(ctx.message.content, ctx.message.jump_url))
 
     # Takes: user's id, a datetime object, a RemindType object, and some data (string, message link, etc)
+    # BIG FAT OH OF FUUUUUUUUUUUUUUCKING logn
     def AddReminder(self, userId, channelID, serverID, dateTime, remindType, data):
         print(f"Added Reminder: {dateTime} - {remindType}")
-        # TODO: delete
-        self.reminders[userId].append(Reminder(data, userId, remindType, channelID, serverID, dateTime))
-
         r = Reminder(data, userId, remindType, channelID, serverID, dateTime)
         self.InsertReminder(r)
 
         # todo handle different reminder types (not a message)
+
         self.SaveReminderFile()
 
     # asynchronous loop that runs indefinitely every specified number of seconds
     @tasks.loop(seconds=5.0)
     async def LoopReminders(self):
-        await self.bot.wait_until_ready()
         await self.CheckReminders()
         await self.CheckNextReminder()
 
@@ -138,23 +133,33 @@ class ReminderCog(commands.Cog):
             if u != 0:
                 for r_i in range(0, len(self.reminders[u])):
                     if now >= self.reminders[u][r_i].dateTime:
-                        await self.RemindUser(u, r_i)
+                        await self.RemindUser(u)
 
+    # check nearest reminder (chronologically) to see if the time to remind has come
+    # BIG OH OF FUUUUUUUUUUUUCKING ONE
     async def CheckNextReminder(self):
+        r = self.PeekReminder()
+        if r is None:
+            return
+
         now = datetime.datetime.now()
-        r = self.Peek()
         if now >= r.dateTime:
             await self.RemindUser()
 
-    def Peek(self):
-        return self.remindersList.peek()[1]
+    def PeekReminder(self):
+        if len(self.remindersQueue.queue) > 0:
+            return self.remindersQueue.peek()[1]
+
+    def GetReminder(self) -> Reminder:
+        if len(self.remindersQueue.queue) > 0:
+            return self.remindersQueue.get()[1]
 
     # remind the user
     async def RemindUser(self, delete=True):
         if delete:
-            reminder: Reminder = self.remindersList.get()
+            reminder: Reminder = self.GetReminder()
         else:
-            reminder: Reminder = self.remindersList.peek()
+            reminder: Reminder = self.PeekReminder()
 
         dt = reminder.dateTime
         channel = self.bot.get_channel(reminder.channelID)
@@ -180,7 +185,7 @@ class ReminderCog(commands.Cog):
     async def ListReminders(self, ctx):
         dt = datetime.datetime
         now = dt.now()
-        for r in self.remindersList.queue:
+        for r in self.remindersQueue.queue:
             user = await self.bot.fetch_user(r.userID)
             await ctx.send(
                 f"{user.name}: "
@@ -220,22 +225,26 @@ class ReminderCog(commands.Cog):
                 0: [],  # Sample (where u_id = 0):
             }
 
-        self.remindersList = PriorityQueuePeek()
+        self.remindersQueue = PriorityQueuePeek()
 
         for u in self.reminders:
             for r in self.reminders[u]:
-                self.remindersList.put((r.dateTime, r))
+                self.remindersQueue.put((r.dateTime, r))
 
         self.SaveReminderFile()
 
     def InsertReminder(self, r: Reminder):
-        self.remindersList.put((r.dateTime, r))
+        self.remindersQueue.put((r.dateTime, r))
 
     def SaveReminderFile(self):
-        save_obj(self.remindersList.queue, REMINDER_Q_FILE)
+        save_obj(self.remindersQueue.queue, REMINDER_FILE)
         print("Saving reminder file...")
 
-    def LoadReminderFile(self):
-        q = load_obj(REMINDER_Q_FILE)
-        self.remindersList.queue = q
-        print("Loaded reminder file.")
+    def LoadReminderFile(self, rFileName):
+        try:
+            q = load_obj(rFileName)
+            self.remindersQueue.queue = q
+            print("Loaded reminder file.")
+        except (AttributeError, FileNotFoundError) as e:
+            print("Didn't find reminder file. Generating.")
+            self.GenerateReminderFile()
