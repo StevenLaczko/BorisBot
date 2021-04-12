@@ -2,8 +2,11 @@ import discord
 import discord.ext.tasks
 #import GPT_Test
 import re
-import random
+import random 
 from discord.ext import commands
+import subprocess
+import os
+from textwrap import dedent
 
 import Respondtron
 import MafiaCog
@@ -34,6 +37,15 @@ async def hi(ctx):
 
     response = random.choice(greetings)
     await ctx.send(response)
+
+@bot.command(name='output')
+async def output(ctx, arg):
+	with open("nohup.out", 'r') as f:
+		lines = f.readlines()
+		last_lines = lines[-int(arg):]
+		last_lines = ''.join(last_lines)
+		await ctx.send(last_lines)
+		f.close()
 
 
 @bot.command(name='plan', help='For planning on the weekend. You sir have to ping everyone, though.')
