@@ -29,6 +29,7 @@ class RemindE(Enum):
 
 
 REMINDER_FILE = "reminders"
+REMINDER_Q_FILE = "reminders_q"
 DELAY_CHECK_REMINDERS_SEC = 5
 
 
@@ -39,7 +40,7 @@ class ReminderCog(commands.Cog):
         # load reminders from json file
         self.bot = bot
         self.remindersQueue: PriorityQueuePeek = PriorityQueuePeek()
-        self.LoadReminderFile(REMINDER_FILE)
+        self.LoadReminderFile(REMINDER_Q_FILE)
 
         self.lastSaved = datetime.datetime.now()
         self.LoopReminders.start()
@@ -92,28 +93,6 @@ class ReminderCog(commands.Cog):
                 self.AddReminder(ctx.message.author.id, ctx.channel.id, ctx.guild.id, dateTime, RemindType.MessageLink,
                                  Message(ctx.message.content, ctx.message.jump_url))
 
-    # Takes: user's id, a datetime object, a RemindType object, and some data (string, message link, etc)
-    # BIG FAT OH OF FUUUUUUUUUUUUUUCKING logn
-    def AddReminder(self, userId, channelID, serverID, dateTime, remindType, data):
-        print(f"Added Reminder: {dateTime} - {remindType}")
-        r = Reminder(data, userId, remindType, channelID, serverID, dateTime)
-        self.InsertReminder(r)
-
-        # todo handle different reminder types (not a message)
-
-        self.SaveReminderFile()
-
-    # asynchronous loop that runs indefinitely every specified number of seconds
-    @tasks.loop(seconds=5.0)
-    async def LoopReminders(self):
-        await self.CheckReminders()
-        await self.CheckNextReminder()
-
-    @LoopReminders.before_loop
-    async def Before_LoopReminders(self):
-        print("Waiting for bot_ready to start loop...")
-        await self.bot.wait_until_ready()
-
     # Loops through users in reminders. Returns true if user has a spot in the reminders dictionary
     def CheckUserKnown(self, userID):
         for storedUserId in self.reminders:
@@ -125,15 +104,26 @@ class ReminderCog(commands.Cog):
     def CreateUserKey(self, userID):
         self.reminders[userID] = []
 
-    # iterate through all reminders and handle sending out reminders
-    async def CheckReminders(self):
-        dt = datetime.datetime
-        now = dt.now()
-        for u in self.reminders:
-            if u != 0:
-                for r_i in range(0, len(self.reminders[u])):
-                    if now >= self.reminders[u][r_i].dateTime:
-                        await self.RemindUser(u)
+    # Takes: user's id, a datetime object, a RemindType object, and some data (string, message link, etc)
+    # BIG FAT OH OF FUUUUUUUUUUUUUUCKING logn
+    def AddReminder(self, userId, channelID, serverID, dateTime, remindType, content):
+        print(f"Added Reminder: {dateTime} - {remindType}")
+        r = Reminder(content, userId, remindType, channelID, serverID, dateTime)
+        self.InsertReminder(r)
+
+        # todo handle different reminder types (not a message)
+
+        self.SaveReminderFile()
+
+    # asynchronous loop that runs indefinitely every specified number of seconds
+    @tasks.loop(seconds=5.0)
+    async def LoopReminders(self):
+        await self.CheckNextReminder()
+
+    @LoopReminders.before_loop
+    async def Before_LoopReminders(self):
+        print("Waiting for bot_ready to start loop...")
+        await self.bot.wait_until_ready()
 
     # check nearest reminder (chronologically) to see if the time to remind has come
     # BIG OH OF FUUUUUUUUUUUUCKING ONE
@@ -152,7 +142,9 @@ class ReminderCog(commands.Cog):
 
     def GetReminder(self) -> Reminder:
         if len(self.remindersQueue.queue) > 0:
-            return self.remindersQueue.get()[1]
+            r = self.remindersQueue.get()[1]
+            self.SaveReminderFile()
+            return r
 
     # remind the user
     async def RemindUser(self, delete=True):
@@ -191,21 +183,17 @@ class ReminderCog(commands.Cog):
                 f"{user.name}: "
                 f"{r.dateTime} - {r.content.link}")
 
+    @commands.command(name="convRem")
+    async def ConvertReminders(self, ctx):
+        oldReminders = load_obj(REMINDER_FILE)
+        for u in oldReminders:
+            for r in oldReminders[u]:
+                self.remindersQueue.put((r.dateTime, r))
+
+            ctx.send("Yeet")
+
     # generate empty reminder json
     def GenerateReminderFile(self):
-        # TODO delete
-        # structure:
-        # reminders = {
-        #   userID [
-        #         Reminder():
-        #            content
-        #            type
-        #            channel
-        #            dateTime
-        #            isActive
-        #   ]
-        # }
-
         # structure:
         # in chronological order
         # reminders = [
@@ -218,18 +206,7 @@ class ReminderCog(commands.Cog):
         #        isActive
         # ]
 
-        # TODO delete:
-        # dict of reminders
-        self.reminders = \
-            {
-                0: [],  # Sample (where u_id = 0):
-            }
-
         self.remindersQueue = PriorityQueuePeek()
-
-        for u in self.reminders:
-            for r in self.reminders[u]:
-                self.remindersQueue.put((r.dateTime, r))
 
         self.SaveReminderFile()
 
@@ -237,7 +214,7 @@ class ReminderCog(commands.Cog):
         self.remindersQueue.put((r.dateTime, r))
 
     def SaveReminderFile(self):
-        save_obj(self.remindersQueue.queue, REMINDER_FILE)
+        save_obj(self.remindersQueue.queue, REMINDER_Q_FILE)
         print("Saving reminder file...")
 
     def LoadReminderFile(self, rFileName):
