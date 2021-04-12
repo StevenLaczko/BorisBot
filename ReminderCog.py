@@ -53,13 +53,15 @@ class ReminderCog(commands.Cog):
         dur = 1
         date = 0
 
-        # handles wrong number of inputs
+        #todo allow any number of inputs, this is dumb and parse is awesome
+        # handle wrong number of inputs
         if len(args) > 2:
             print("RemindMeCmd: Wrong num args. Number of args: ", len(args))
-            await ctx.send("Command's wrong, bud. e.g. ~remindMe N hours/days/years")
+            await ctx.send(
+                "Command's wrong, bud. e.g. ~remindMe N hours/days/years or ~remindMe (date) or ~remindMe (time)")
             return
 
-        # Handles if the user entered a particular date in the second argument instead of a time duration
+        # Handles if the user entered a particular date or time in the second argument instead of a time duration
         isDuration = False
         duration = None
         if len(args) == 2:
@@ -76,9 +78,9 @@ class ReminderCog(commands.Cog):
         if self.CheckUserKnown(ctx.message.author.id) is False:
             self.CreateUserKey(ctx.message.author.id)
         if dateTime is not None:
-            self.AddReminder(ctx.message.author.id, ctx.channel.id, ctx.guild.id, dateTime, RemindType.MessageLink,
-                             Message(ctx.message.content, ctx.message.jump_url))
-            await ctx.message.add_reaction('✅')
+            await self.AddReminder(ctx.message.author.id, ctx.channel.id, ctx.guild.id, dateTime,
+                                   RemindType.MessageLink,
+                                   Message(ctx.message.content, ctx.message.jump_url), ctx.message)
             return
 
         # TODO: handle specific phrases to specify duration ("in a week", "in 2 months", etc.)
@@ -90,8 +92,9 @@ class ReminderCog(commands.Cog):
             if self.CheckUserKnown(ctx.message.author.id):
                 # GetDateTime returns a date and time the user specifies
                 dateTime = GetDateTimeFromDur(int(args[num]), duration)
-                self.AddReminder(ctx.message.author.id, ctx.channel.id, ctx.guild.id, dateTime, RemindType.MessageLink,
-                                 Message(ctx.message.content, ctx.message.jump_url))
+                await self.AddReminder(ctx.message.author.id, ctx.channel.id, ctx.guild.id, dateTime,
+                                       RemindType.MessageLink,
+                                       Message(ctx.message.content, ctx.message.jump_url), ctx.message)
 
     # Loops through users in reminders. Returns true if user has a spot in the reminders dictionary
     def CheckUserKnown(self, userID):
@@ -106,14 +109,16 @@ class ReminderCog(commands.Cog):
 
     # Takes: user's id, a datetime object, a RemindType object, and some data (string, message link, etc)
     # BIG FAT OH OF FUUUUUUUUUUUUUUCKING logn
-    def AddReminder(self, userId, channelID, serverID, dateTime, remindType, content):
+    async def AddReminder(self, userId, channelID, serverID, dateTime, remindType, content, message=None):
         print(f"Added Reminder: {dateTime} - {remindType}")
         r = Reminder(content, userId, remindType, channelID, serverID, dateTime)
         self.InsertReminder(r)
-
         # todo handle different reminder types (not a message)
 
         self.SaveReminderFile()
+
+        if message is not None:
+            await message.add_reaction('✅')
 
     # asynchronous loop that runs indefinitely every specified number of seconds
     @tasks.loop(seconds=5.0)
@@ -174,6 +179,7 @@ class ReminderCog(commands.Cog):
         self.SaveReminderFile()
 
     @commands.command(name="listRem")
+    @commands.is_owner()
     async def ListReminders(self, ctx):
         dt = datetime.datetime
         now = dt.now()
@@ -196,7 +202,6 @@ class ReminderCog(commands.Cog):
                 await ctx.send("The old reminder file ain't the right type. It's got tuples, friend.")
             else:
                 await ctx.send("Some weird type error happened.")
-
 
     # generate empty reminder json
     def GenerateReminderFile(self):
