@@ -185,12 +185,18 @@ class ReminderCog(commands.Cog):
 
     @commands.command(name="convRem")
     async def ConvertReminders(self, ctx):
-        oldReminders = load_obj(REMINDER_FILE)
-        for u in oldReminders:
-            for r in oldReminders[u]:
-                self.remindersQueue.put((r.dateTime, r))
-
+        try:
+            oldReminders = load_obj(REMINDER_FILE)
+            for u in oldReminders:
+                for r in oldReminders[u]:
+                    self.remindersQueue.put((r.dateTime, r))
             ctx.send("Yeet")
+        except TypeError as e:
+            if "tuple" in e.__str__():
+                await ctx.send("The old reminder file ain't the right type. It's got tuples, friend.")
+            else:
+                await ctx.send("Some weird type error happened.")
+
 
     # generate empty reminder json
     def GenerateReminderFile(self):
