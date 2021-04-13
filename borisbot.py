@@ -9,7 +9,6 @@ import os
 from textwrap import dedent
 
 import Respondtron
-import MafiaCog
 import ReminderCog
 import MemeGrabber
 

@@ -64,9 +64,19 @@ def ConvertEscapedFormToNote(str):
 
 
 def save_obj(obj, name):
-    with open('obj/' + name + '.pkl', 'wb+') as f:
+    name = ensure_pkl_ext(name)
+    with open('obj/' + name, 'wb+') as f:
         pickle.dump(obj, f, pickle.DEFAULT_PROTOCOL)
 
+
 def load_obj(name):
-    with open('obj/' + name + '.pkl', 'rb') as f:
+    name = ensure_pkl_ext(name)
+    with open('obj/' + name, 'rb') as f:
         return pickle.load(f)
+
+
+def ensure_pkl_ext(name):
+    ext = ".pkl"
+    if name[-4:] == ext:
+        ext = ""
+    return name + ext
