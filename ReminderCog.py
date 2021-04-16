@@ -6,6 +6,7 @@ from pytz import timezone
 from enum import Enum, auto
 import dateutil.parser
 import traceback
+import os
 from Message import Message
 from PriorityQueuePeek import PriorityQueuePeek
 from Reminder import Reminder
@@ -14,9 +15,8 @@ from typing import List, Dict
 
 
 class RemindType(Enum):
-    MessageLink = auto  # links to a particular discord message
-    String = auto  # sends the user the message they typed
-    Message = auto
+    MessageLink = 0  # links to a particular discord message
+    String = 1  # sends the user the message they typed
 
 
 class RemindE(Enum):
@@ -28,97 +28,100 @@ class RemindE(Enum):
     isActive = 5
 
 
-REMINDER_FILE = "reminders"
-REMINDER_Q_FILE = "reminders_q"
+MSG_FLAG = "-m"
 DELAY_CHECK_REMINDERS_SEC = 5
 
 
 class ReminderCog(commands.Cog):
     reminders = {}
 
-    def __init__(self, bot):
+    def __init__(self, bot, reminderFileName="reminders.pkl", msgFlag="-m"):
         # load reminders from json file
         self.bot = bot
+        self.rFileName = reminderFileName
+        self.msgFlag = msgFlag
         self.remindersQueue: PriorityQueuePeek = PriorityQueuePeek()
-        self.LoadReminderFile(REMINDER_Q_FILE)
+        self.LoadReminderFile(self.rFileName)
 
         self.lastSaved = datetime.datetime.now()
         self.LoopReminders.start()
 
     # sends the user a link to the command message at a given time
-    @commands.command(name="remindMe", help="Usage: \"~remindMe N days\" or \"~remindMe M years\", etc")
+    @commands.command(name="remindMe",
+                      help="~remindMe N hours/days/etc or ~remindMe (date) or ~remindMe (time)\n\
+                      Use -m \"my message\" to add a message")
     async def RemindMeCmd(self, ctx, *args):
         # frickin LOCAL ENUM
         num = 0
         dur = 1
         date = 0
+        # TODO: replace with actual enum
+        # TODO TODO: actually parse the input smartly with regex or smthn
+        # So... have a parse reminder function, loop through the args and find stuff wih regex and other funcs
 
-        #todo allow any number of inputs, this is dumb and parse is awesome
-        # handle wrong number of inputs
-        if len(args) > 2:
-            print("RemindMeCmd: Wrong num args. Number of args: ", len(args))
-            await ctx.send(
-                "Command's wrong, bud. e.g. ~remindMe N hours/days/years or ~remindMe (date) or ~remindMe (time)")
-            return
-
-        # Handles if the user entered a particular date or time in the second argument instead of a time duration
-        isDuration = False
         duration = None
-        if len(args) == 2:
+        if len(args) > 1:
             duration = ParseDur(args[dur])
-            if duration is not None:
-                isDuration = True
 
-        dateTime = None
-        if not isDuration:
-            est = timezone('US/Eastern')
-            dateTime = dateutil.parser.parse(args[date])
-
-        # Handles if the user entered a date
-        if self.CheckUserKnown(ctx.message.author.id) is False:
-            self.CreateUserKey(ctx.message.author.id)
-        if dateTime is not None:
-            await self.AddReminder(ctx.message.author.id, ctx.channel.id, ctx.guild.id, dateTime,
-                                   RemindType.MessageLink,
-                                   Message(ctx.message.content, ctx.message.jump_url), ctx.message)
+        if duration is not None:
+            await self.RemindDur(ctx, args, duration)
             return
+        else:
+            await self.RemindDate(ctx, args)
+
+    async def RemindDate(self, ctx, args):
+        dateTime = dateutil.parser.parse(args[0])
+
+        if dateTime is None:
+            await ctx.message.add_reaction('❌')
+            await ctx.send(f"Couldn't parse {args[0]}. B(")
+
+        m, isMessage = GetMessage(self.msgFlag, args, ctx)
+        remindType = RemindType.String if isMessage else RemindType.MessageLink
+        newReminder = Reminder(Message(m, ctx.message.jump_url), ctx.message.author.id,
+                               remindType, ctx.channel.id, ctx.guild.id, dateTime)
+        try:
+            await self.AddReminder(newReminder, ctx.message)
+        except RuntimeError as e:
+            print("ERROR: remindMe func failed to add a reminder")
+            traceback.print_exc(e)
+            await ctx.message.add_reaction('❌')
+            await ctx.send('Something went wrong... Use ~help remindMe if you like.')
+
+    async def RemindDur(self, ctx, args, duration):
+        # check if message is correct format
+        if not args[0].isnumeric() or not int(args[0]) > 0:
+            return None
 
         # TODO: handle specific phrases to specify duration ("in a week", "in 2 months", etc.)
         # dateTime = self.parseDurPhrase()
+        dateTime = GetDateTimeFromDur(int(args[0]), duration)
 
-        # Handles if the user entered a duration (N days/months/years)
-        if args[num].isnumeric() and int(args[num]) > 0 and duration is not None:
-            # CheckUserKnown checks if a user already has an entry in the database and gives them one if not
-            if self.CheckUserKnown(ctx.message.author.id):
-                # GetDateTime returns a date and time the user specifies
-                dateTime = GetDateTimeFromDur(int(args[num]), duration)
-                await self.AddReminder(ctx.message.author.id, ctx.channel.id, ctx.guild.id, dateTime,
-                                       RemindType.MessageLink,
-                                       Message(ctx.message.content, ctx.message.jump_url), ctx.message)
+        m, isMessage = GetMessage(self.msgFlag, args, ctx)
 
-    # Loops through users in reminders. Returns true if user has a spot in the reminders dictionary
-    def CheckUserKnown(self, userID):
-        for storedUserId in self.reminders:
-            if storedUserId == userID:
-                return True
-        return False
+        remindType = RemindType.String if isMessage else RemindType.MessageLink
 
-    # create user key in reminders dictionary
-    def CreateUserKey(self, userID):
-        self.reminders[userID] = []
+        newReminder = Reminder(Message(m, ctx.message.jump_url), ctx.message.author.id,
+                               remindType, ctx.channel.id, ctx.guild.id, dateTime)
+        try:
+            await self.AddReminder(newReminder, ctx.message)
+        except RuntimeError as e:
+            print("ERROR: remindMe func failed to add a reminder")
+            traceback.print_exc(e)
+            await ctx.message.add_reaction('❌')
+            await ctx.send('Something went wrong... Use ~help remindMe if you like.')
 
     # Takes: user's id, a datetime object, a RemindType object, and some data (string, message link, etc)
     # BIG FAT OH OF FUUUUUUUUUUUUUUCKING logn
-    async def AddReminder(self, userId, channelID, serverID, dateTime, remindType, content, message=None):
-        print(f"Added Reminder: {dateTime} - {remindType}")
-        r = Reminder(content, userId, remindType, channelID, serverID, dateTime)
+    async def AddReminder(self, r: Reminder, msg):
+        print(f"Added Reminder: {r.dateTime} - {r.remindType}")
         self.InsertReminder(r)
-        # todo handle different reminder types (not a message)
+        # todo handle different reminder types (not a messagelink)
 
         self.SaveReminderFile()
 
-        if message is not None:
-            await message.add_reaction('✅')
+        if msg is not None:
+            await msg.add_reaction('✅')
 
     # asynchronous loop that runs indefinitely every specified number of seconds
     @tasks.loop(seconds=5.0)
@@ -160,20 +163,22 @@ class ReminderCog(commands.Cog):
 
         dt = reminder.dateTime
         channel = self.bot.get_channel(reminder.channelID)
-        message = "_ _"
+        message = reminder.content.text
+        remindType = reminder.remindType
         user = await self.bot.fetch_user(reminder.userID)
-        eTitle = "Reminder for " + user.name
-        eDesc = '\n'.join((dt.strftime("%x %X"), reminder.content.link, user.mention))
-        # eUrl = reminder.content.link
-        # eTimestamp = reminder.dateTime
-        embed = None
+        title = f"Your reminder is here, {user.name}!"
+        link = reminder.content.link
 
-        if reminder.type is RemindType.MessageLink:
-            embed = embeds.Embed(title=eTitle, description=eDesc, )
-        elif reminder.type is RemindType.Message:
-            message = "Your reminder is here, friend!" + "\n" \
-                      + "```" + reminder.content.link + "```" + "\n" \
-                      + ">" + reminder.content.text
+        desc = []
+        if remindType == RemindType.String:
+            desc.append("<< " + message + " >>")
+        desc.append(reminder.content.link)
+        desc.append(user.mention)
+        desc = '\n'.join(desc)
+
+        embed = None
+        embed = embeds.Embed(title=title, description=desc)
+        embed.set_footer(text=dt.strftime("%x %X"))
         await channel.send(embed=embed)
 
         self.SaveReminderFile()
@@ -188,20 +193,6 @@ class ReminderCog(commands.Cog):
             await ctx.send(
                 f"{user.name}: "
                 f"{r.dateTime} - {r.content.link}")
-
-    @commands.command(name="convRem")
-    async def ConvertReminders(self, ctx):
-        try:
-            oldReminders = load_obj(REMINDER_FILE)
-            for u in oldReminders:
-                for r in oldReminders[u]:
-                    self.remindersQueue.put((r.dateTime, r))
-            ctx.send("Yeet")
-        except TypeError as e:
-            if "tuple" in e.__str__():
-                await ctx.send("The old reminder file ain't the right type. It's got tuples, friend.")
-            else:
-                await ctx.send("Some weird type error happened.")
 
     # generate empty reminder json
     def GenerateReminderFile(self):
@@ -225,7 +216,10 @@ class ReminderCog(commands.Cog):
         self.remindersQueue.put((r.dateTime, r))
 
     def SaveReminderFile(self):
-        save_obj(self.remindersQueue.queue, REMINDER_Q_FILE)
+        if os.path.exists("obj/reminders_q.pkl"):
+            os.rename("obj/reminders_q.pkl", "obj/" + self.rFileName)
+
+        save_obj(self.remindersQueue.queue, self.rFileName)
         print("Saving reminder file...")
 
     def LoadReminderFile(self, rFileName):
