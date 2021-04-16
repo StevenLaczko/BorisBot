@@ -18,6 +18,10 @@ WEIGHTS = [1.2, 0.7, 1.1, 1]
 PROB_MIN = 0.7
 PLAN_REACTIONS = ['🇫', '🇸', '🌞', '❌']
 
+# ReminderCog
+REMINDER_FILE_NAME = "reminders.pkl"
+MESSAGE_FLAG = "-m"
+
 with open(TOKEN_FILE, 'r') as tokenFile:
     TOKEN = tokenFile.read()
 
@@ -96,7 +100,7 @@ args = {Respondtron.ARGS.WEIGHTS: WEIGHTS,
 respTron = Respondtron.Respondtron(bot, botDict, botNoResponse)
 bot.add_cog(respTron)
 
-remindCog = ReminderCog.ReminderCog(bot)
+remindCog = ReminderCog.ReminderCog(bot, REMINDER_FILE_NAME, MESSAGE_FLAG)
 bot.add_cog(remindCog)
 
 memeGrabber = MemeGrabber.MemeGrabber(bot)

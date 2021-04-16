@@ -40,6 +40,10 @@ class MyTestCase(unittest.TestCase):
         self.reset_rc()
         self.rc.LoadReminderFile(REMINDER_Q_FILE)
 
+    def test_date_reminder(self):
+        pass
+        #TODO: Write tests for each type of reminder
+
     def reset_rc(self):
         self.rc = None
         self.rc = ReminderCog(self.bot)
@@ -57,6 +61,7 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(2, self.rc.GetReminder().userID)
         self.assertEqual(3, self.rc.GetReminder().userID)
         self.assertIsNone(self.rc.GetReminder())
+
 
 
 if __name__ == '__main__':

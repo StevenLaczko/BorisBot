@@ -54,6 +54,14 @@ def ParseDur(durStr: str):
     return None
 
 
+def GetMessage(msgFlag, args, ctx=None):
+        for i in range(len(args)):
+            if args[i] == msgFlag:
+                return args[i+1], True
+
+        return ctx.message.content, False
+
+
 # FIXME use these to put notes into CSV
 def ConvertNoteToEscapedForm(str):
     return str.replace('\n', '\\n')

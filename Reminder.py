@@ -1,8 +1,10 @@
+import Message
+
 class Reminder:
     def __init__(self, content, userID, remindType, channelID, serverID, dateTime, isActive=True):
-        self.content = content
+        self.content: Message = content
         self.userID = userID
-        self.type = remindType
+        self.remindType = remindType
         self.channelID = channelID
         self.serverID = serverID
         self.dateTime = dateTime
