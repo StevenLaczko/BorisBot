@@ -1,8 +1,8 @@
 import discord
 import discord.ext.tasks
-#import GPT_Test
+# import GPT_Test
 import re
-import random 
+import random
 from discord.ext import commands
 import subprocess
 import os
@@ -41,14 +41,21 @@ async def hi(ctx):
     response = random.choice(greetings)
     await ctx.send(response)
 
+
 @bot.command(name='output')
 async def output(ctx, arg):
-	with open("nohup.out", 'r') as f:
-		lines = f.readlines()
-		last_lines = lines[-int(arg):]
-		last_lines = ''.join(last_lines)
-		await ctx.send(last_lines)
-		f.close()
+    with open("nohup.out", 'r') as f:
+        lines = f.readlines()
+        last_lines = lines[-int(arg):]
+        last_lines = ''.join(last_lines)
+        await ctx.send(last_lines)
+        f.close()
+
+
+@bot.command(name='update')
+@commands.is_owner()
+async def update(ctx):
+    exec("update.sh")
 
 
 @bot.command(name='plan', help='For planning on the weekend. You sir have to ping everyone, though.')
@@ -118,10 +125,10 @@ bot.add_cog(remindCog)
 memeGrabber = MemeGrabber.MemeGrabber(bot)
 bot.add_cog(memeGrabber)
 
-#mafiaCog = MafiaCog.Mafia(bot, None, None)
-#bot.add_cog(mafiaCog)
+# mafiaCog = MafiaCog.Mafia(bot, None, None)
+# bot.add_cog(mafiaCog)
 
-#gptTest = GPT_Test.GPT_Test(bot)
-#bot.add_cog(gptTest)
+# gptTest = GPT_Test.GPT_Test(bot)
+# bot.add_cog(gptTest)
 
 bot.run(TOKEN)
