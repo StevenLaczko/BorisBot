@@ -3,6 +3,7 @@ import os
 import datetime
 from discord.ext import commands
 
+from borisbot import on_message
 from ReminderCog import ReminderCog
 from ReminderCog import REMINDER_Q_FILE
 from ReminderCog import RemindType
@@ -39,6 +40,9 @@ class MyTestCase(unittest.TestCase):
         self.rc.SaveReminderFile()
         self.reset_rc()
         self.rc.LoadReminderFile(REMINDER_Q_FILE)
+
+    def test_fuzzy_command_matching(self):
+        on_message("remindMe")
 
     def reset_rc(self):
         self.rc = None
