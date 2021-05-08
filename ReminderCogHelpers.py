@@ -1,7 +1,12 @@
+import re
 from enum import IntEnum
 import datetime
 import pickle
+
+import dateutil.parser
+
 import StringMatchHelp
+from ReminderCog import TIME_REGEX, DATE_REGEX
 
 
 class DURATIONS(IntEnum):
@@ -43,23 +48,34 @@ def GetDateTimeFromDur(num, dur):
     return remindTime
 
 
+def IfTimeGet(messageTuple):
+    message = " ".join(messageTuple)
+    time = re.match(TIME_REGEX, message)
+    date = re.match(DATE_REGEX, message)
+    timestamp = f"{time} {date}"
+    dateTime = dateutil.parser.parse(timestamp)
+    return dateTime
+
+
+def IfDurationGet(messageTuple):
+    message = " ".join(messageTuple)
+    return ParseDur(message)
+
+
 # inputs duration string (days, months, years, etc), outputs
-def ParseDur(durStr: str):
-    for i in range(len(DURATIONS)):
-        if StringMatchHelp.fuzzyMatchString(durStr, DURATIONS(i).name, StringMatchHelp.DEF_WEIGHTS,
-                                            StringMatchHelp.DEF_PROB)[0] is True:
-            print("Matched duration:", DURATIONS(i).name)
-            return DURATIONS(i)
-    print("Matched no duration strings")
+def ParseDur(message: str):
+    for dur in DURATIONS:
+        if dur.__name__ in message:
+            return dur
     return None
 
 
 def GetMessage(msgFlag, args, ctx=None):
-        for i in range(len(args)):
-            if args[i] == msgFlag:
-                return args[i+1], True
+    for i in range(len(args)):
+        if args[i] == msgFlag:
+            return args[i + 1], True
 
-        return ctx.message.content, False
+    return ctx.message.content, False
 
 
 # FIXME use these to put notes into CSV

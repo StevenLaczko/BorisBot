@@ -1,5 +1,3 @@
-import queue
-
 from discord.ext import commands, tasks
 from discord import embeds
 from pytz import timezone
@@ -7,6 +5,8 @@ from enum import Enum, auto
 import dateutil.parser
 import traceback
 import os
+import re
+
 from Message import Message
 from PriorityQueuePeek import PriorityQueuePeek
 from Reminder import Reminder
@@ -31,6 +31,12 @@ class RemindE(Enum):
 MSG_FLAG = "-m"
 DELAY_CHECK_REMINDERS_SEC = 5
 
+TIME_REGEX = "^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
+DATE_REGEX = "^(?:(?:31(\/|-|\.)(?:0?[13578]|1[02]))\1|(?:(?:29|30)(\/|-|\.)(?:0?[13-9]|1[0-2])\2))(?:(?:1[6-9]|[" \
+             "2-9]\d)?\d{2})$|^(?:29(\/|-|\.)0?2\3(?:(?:(?:1[6-9]|[2-9]\d)?(?:0[48]|[2468][048]|[13579][26])|(?:(" \
+             "?:16|[2468][048]|[3579][26])00))))$|^(?:0?[1-9]|1\d|2[0-8])(\/|-|\.)(?:(?:0?[1-9])|(?:1[0-2]))\4(?:(" \
+             "?:1[6-9]|[2-9]\d)?\d{2})$ "
+
 
 class ReminderCog(commands.Cog):
     reminders = {}
@@ -51,26 +57,17 @@ class ReminderCog(commands.Cog):
                       help="~remindMe N hours/days/etc or ~remindMe (date) or ~remindMe (time)\n\
                       Use -m \"my message\" to add a message")
     async def RemindMeCmd(self, ctx, *args):
-        # frickin LOCAL ENUM
-        num = 0
-        dur = 1
-        date = 0
-        # TODO: replace with actual enum
-        # TODO TODO: actually parse the input smartly with regex or smthn
         # So... have a parse reminder function, loop through the args and find stuff wih regex and other funcs
 
-        duration = None
-        if len(args) > 1:
-            duration = ParseDur(args[dur])
+        duration = self.IfDurationGet(args)
+        dateTime = self.IfTimeGet(args)
 
         if duration is not None:
             await self.RemindDur(ctx, args, duration)
-            return
         else:
-            await self.RemindDate(ctx, args)
+            await self.RemindDate(ctx, args, dateTime)
 
-    async def RemindDate(self, ctx, args):
-        dateTime = dateutil.parser.parse(args[0])
+    async def RemindDate(self, ctx, args, dateTime):
 
         if dateTime is None:
             await ctx.message.add_reaction('❌')
