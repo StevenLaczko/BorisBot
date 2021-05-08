@@ -4,40 +4,19 @@ import random
 import discord
 import discord.ext.tasks
 from discord.ext import commands
-
 import Respondtron
 import StringMatchHelp
 import borisbot
 
 
-def get_decorators(function):
-    """Returns list of decorators names
-
-    Args:
-        function (Callable): decorated method/function
-
-    Return:
-        List of decorators as strings
-
-    Example:
-        Given:
-
-        @my_decorator
-        @another_decorator
-        def decorated_function():
-            pass
-
-        #>>> get_decorators(decorated_function)
-        ['@my_decorator', '@another_decorator']
-
-    """
-    source = inspect.getsource(function)
-    index = source.find("def ")
-    return [
-        line.strip().split()[0]
-        for line in source[:index].strip().splitlines()
-        if line.strip()[0] == "@"
-    ]
+def fix_message(message, command):
+    cmdStr = message.content
+    cmdList: list = cmdStr.split()
+    cmdList[0] = cmdList[0][1:]
+    cmdList[0] = command
+    cmdList[0] = borisbot.BOT_FUZZY_PREFIX + cmdList[0]
+    message.content = ' '.join(cmdList)
+    return message
 
 
 class BorisCommands(commands.Cog):
@@ -82,7 +61,7 @@ class BorisCommands(commands.Cog):
     async def on_ready(self):
         print("Boris has connected to Discord!")
 
-    @commands.Cog.listener("on_message")
+    @commands.Cog.listener(name="on_message")
     async def on_message(self, message: discord.Message):
         print(message.content)
         if message.author == self.bot.user:
@@ -91,16 +70,16 @@ class BorisCommands(commands.Cog):
         if message.content == 'raise-exception':
             raise discord.DiscordException
 
-        for commandClass in borisbot.COMMAND_CLASSES:
-            commandMethods = [commandClass.__dict__[method] for method in commandClass.__dict__ if
-                              method.startswith('_') is False]
-            for command in commandMethods:
-                if isinstance(command, commands.core.Command):
-                    if StringMatchHelp.fuzzyMatchString(message.content, str(command))[0]:
-                        fuzzyMessage = self.fix_message(message, str(command))
-                        print(f"Matched command with {str(command)}.")
-                        await self.bot.process_commands(fuzzyMessage)
-                        return
+        # for commandClass in borisbot.COMMAND_CLASSES:
+        #     commandMethods = [commandClass.__dict__[method] for method in commandClass.__dict__ if
+        #                       method.startswith('_') is False]
+        #     for command in commandMethods:
+        #         if isinstance(command, commands.core.Command):
+        #             if StringMatchHelp.fuzzyMatchString(message.content, str(command))[0]:
+        #                 fuzzyMessage = self.fix_message(message, str(command))
+        #                 print(f"Matched command with {str(command)}.")
+        #                 await self.bot.process_commands(fuzzyMessage)
+        #                 return
 
         await self.bot.process_commands(message)
 
@@ -120,13 +99,4 @@ class BorisCommands(commands.Cog):
                 # await send_message(696863794743345152, args[0])
             else:
                 raise
-
-    def fix_message(self, message, command):
-        cmdStr = message.content
-        cmdList: list = cmdStr.split()
-        cmdList[0] = cmdList[0][1:]
-        cmdList[0] = command
-        cmdList[0] = borisbot.BOT_FUZZY_PREFIX + cmdList[0]
-        message.content = ' '.join(cmdList)
-        return message
 

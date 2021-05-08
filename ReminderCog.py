@@ -54,7 +54,8 @@ class ReminderCog(commands.Cog):
         date = 0
 
         #todo allow any number of inputs, this is dumb and parse is awesome
-        # handle wrong number of inputs
+
+        # # handle wrong number of inputs
         if len(args) > 2:
             print("RemindMeCmd: Wrong num args. Number of args: ", len(args))
             await ctx.send(

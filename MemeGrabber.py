@@ -22,8 +22,9 @@ class MemeGrabber(commands.Cog):
         self.loadingMeme = False
         self.aiMemesQueueNum = 0
 
-    @commands.command(name="getMeme", help="Get a random popular meme. Prime cuts.")
+    @commands.command(name="getMemee", help="Get a random popular meme. Prime cuts.")
     async def GetMeme(self, ctx):
+        print('GET MEME PCCCC')
         req = requests.get('https://meme-api.herokuapp.com/gimme')
         json = req.json()
         await ctx.send(json['url'])
