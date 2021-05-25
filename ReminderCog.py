@@ -59,14 +59,15 @@ class ReminderCog(commands.Cog):
     async def RemindMeCmd(self, ctx, *args):
         # So... have a parse reminder function, loop through the args and find stuff wih regex and other funcs
 
-        duration = self.IfDurationGet(args)
-        dateTime = self.IfTimeGet(args)
+        duration = IfDurationGet(args)
+        dateTime = IfTimeGet(args)
 
         if duration is not None:
             await self.RemindDur(ctx, args, duration)
         else:
             await self.RemindDate(ctx, args, dateTime)
 
+    #TODO refactor this? There's so much shared code between the Remind functions
     async def RemindDate(self, ctx, args, dateTime):
 
         if dateTime is None:
