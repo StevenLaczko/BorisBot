@@ -3,9 +3,9 @@ import os
 import datetime
 from discord.ext import commands
 
-from ReminderCog import ReminderCog
-from ReminderCog import REMINDER_Q_FILE
-from ReminderCog import RemindType
+from src.cogs.ReminderCog import ReminderCog
+from src.cogs.ReminderCog import REMINDER_Q_FILE
+from src.cogs.ReminderCog import RemindType
 
 
 class MyTestCase(unittest.TestCase):

@@ -1,17 +1,14 @@
-import queue
-
 from discord.ext import commands, tasks
 from discord import embeds
-from pytz import timezone
-from enum import Enum, auto
+from enum import Enum
 import dateutil.parser
 import traceback
 import os
-from Message import Message
-from PriorityQueuePeek import PriorityQueuePeek
-from Reminder import Reminder
-from ReminderCogHelpers import *
-from typing import List, Dict
+from src.helpers import DiscordBot
+from src.helpers.Message import Message
+from src.helpers.PriorityQueuePeek import PriorityQueuePeek
+from src.helpers.Reminder import Reminder
+from src.helpers.ReminderCogHelpers import *
 
 
 class RemindType(Enum):
@@ -112,7 +109,7 @@ class ReminderCog(commands.Cog):
             await ctx.send('Something went wrong... Use ~help remindMe if you like.')
 
     # Takes: user's id, a datetime object, a RemindType object, and some data (string, message link, etc)
-    # BIG FAT OH OF FUUUUUUUUUUUUUUCKING logn
+    # BIG FAT OH OF FFFFFFFFF logn
     async def AddReminder(self, r: Reminder, msg):
         print(f"Added Reminder: {r.dateTime} - {r.remindType}")
         self.InsertReminder(r)
@@ -128,13 +125,8 @@ class ReminderCog(commands.Cog):
     async def LoopReminders(self):
         await self.CheckNextReminder()
 
-    @LoopReminders.before_loop
-    async def Before_LoopReminders(self):
-        print("Waiting for bot_ready to start loop...")
-        await self.bot.wait_until_ready()
-
     # check nearest reminder (chronologically) to see if the time to remind has come
-    # BIG OH OF FUUUUUUUUUUUUCKING ONE
+    # BIG OH OF FROCKING ONE
     async def CheckNextReminder(self):
         r = self.PeekReminder()
         if r is None:
@@ -215,9 +207,12 @@ class ReminderCog(commands.Cog):
     def InsertReminder(self, r: Reminder):
         self.remindersQueue.put((r.dateTime, r))
 
+    # TODO TODO TODO please god save these reminders as json, not PKL
     def SaveReminderFile(self):
-        if os.path.exists("obj/reminders_q.pkl"):
-            os.rename("obj/reminders_q.pkl", "obj/" + self.rFileName)
+        defReminderFilePath = DiscordBot.getFilePath("reminders_q.pkl")
+        reminderFilePath = DiscordBot.getFilePath(self.rFileName)
+        if os.path.exists(defReminderFilePath):
+            os.rename(defReminderFilePath, reminderFilePath)
 
         save_obj(self.remindersQueue.queue, self.rFileName)
         print("Saving reminder file...")

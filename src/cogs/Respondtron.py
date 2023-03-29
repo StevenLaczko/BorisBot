@@ -1,6 +1,8 @@
-import StringMatchHelp
+from src.helpers import DiscordBot
 import re
 import sys
+import src.helpers.GPTAPI as GPTAPI
+import src.helpers.StringMatchHelp as StringMatchHelp
 from discord.ext import commands
 from enum import Enum, auto
 import random
@@ -12,6 +14,7 @@ class ARGS(Enum):
     PROB_MIN = "probMin"
     DEBUG_CHANNEL_ID = "debugChannelId"
     ENABLE_AUTO_WEIGHTS = "enableAutoWeights"
+    CONTEXT_LEN = "contextLen"
 
 
 class STATES(Enum):
@@ -23,22 +26,18 @@ SPLIT_CHAR = '\t'
 ADMIN_ROLE_ID = 658116626712887316
 PROB_MIN_DEF = 0.7
 WEIGHTS_DEF = [1.2, 0.7, 1.1, 1]
-DEF_SETTINGS = {ARGS.WEIGHTS: WEIGHTS_DEF,
-                ARGS.PROB_MIN: PROB_MIN_DEF,
-                ARGS.DEBUG_CHANNEL_ID: None,
-                ARGS.ENABLE_AUTO_WEIGHTS: False}
+CONTEXT_LEN_DEF = 5
 GOOD_VOTE = "good"
 BAD_VOTE = "bad"
 SETTINGS_FILE = "settings"
 
-
 # TODO Add undo (at least to addResponse)
 class Respondtron(commands.Cog):
-    responseFile = ""
+    responseFilePath = ""
     botNoResponse = ""
     cmdErrorResponse = "I do believe you messed up the command there, son."
     settings = {ARGS.WEIGHTS: WEIGHTS_DEF, ARGS.PROB_MIN: PROB_MIN_DEF, ARGS.DEBUG_CHANNEL_ID: None,
-                ARGS.ENABLE_AUTO_WEIGHTS: False}
+                ARGS.ENABLE_AUTO_WEIGHTS: False, ARGS.CONTEXT_LEN: CONTEXT_LEN_DEF}
     lastScores = ()
     lastRated = False
 
@@ -48,19 +47,19 @@ class Respondtron(commands.Cog):
 
     def __init__(self, bot, responseFile, botNoResponse, args=None):
         self.bot = bot
-        self.responseFile = responseFile
+        self.responseFilePath = DiscordBot.getFilePath(responseFile)
         self.botNoResponse = botNoResponse
         self.loadSettings(args)
 
         # create backup of responses
         print("Backing up response file")
-        with open(self.responseFile, 'r') as responses:
-            with open("backup_" + self.responseFile, 'w+') as backup:
+        with open(self.responseFilePath, 'r') as responses:
+            with open(self.responseFilePath, 'w+') as backup:
                 backup.write(responses.read())
-        try:
-            self.loadSettings(load_obj(SETTINGS_FILE))
-        except FileNotFoundError:
-            print("No settings file")
+        # try:
+        #     self.loadSettings(load_obj(SETTINGS_FILE))
+        # except FileNotFoundError:
+        #     print("No settings file")
 
     # SETTERS
 
@@ -110,24 +109,22 @@ class Respondtron(commands.Cog):
                 await message.add_reaction('❌')
                 self.state = STATES.NOMINAL
 
-        mentionIDList = []
-        for mention in message.mentions:
-            mentionIDList.append(mention.id)
         botID = self.bot.user.id
-        if botID in mentionIDList:
-            print(self.bot.user.name + " mention DETECTED")
+        for m in message.mentions:
+            if botID == m.id:
+                print(self.bot.user.name + " mention DETECTED")
 
-            # get and send response
-            response = await self.getResponse(self.responseFile, message)
-            if response is not None:
-                print("Response: " + response)
-                await message.channel.send(response)
-            else:
-                await message.channel.send(self.botNoResponse)
+                # get and send response
+                response = await self.getResponse(message)
+                if response is not None:
+                    print("Response: " + response)
+                    await message.channel.send(response)
+                else:
+                    await message.channel.send(self.botNoResponse)
 
     @commands.Cog.listener()
     async def on_error(event, *args, **kwargs):
-        with open('err.log', 'a') as f:
+        with open('../../err.log', 'a') as f:
             if event == 'on_message':
                 f.write("Unhandled message: " + str(args[0]) + "\n")
                 # await send_message(696863794743345152, args[0])
@@ -152,7 +149,7 @@ class Respondtron(commands.Cog):
             response += str(arg) + ' '
         response = response.strip()
 
-        if await self.addResponse(ctx, self.responseFile, trigger, response) is False:
+        if await self.addResponse(ctx, self.responseFilePath, trigger, response) is False:
             await ctx.send("I've already learned that, friend!")
 
     @commands.command(name="setProb", help="Usage: ~setProb [0.0-1.0]\nSets the sensitivity for matching triggers.",
@@ -307,27 +304,35 @@ class Respondtron(commands.Cog):
         if len(args) == 3:
             newTrigger = args[1]
             newResponse = args[2]
-            with open(self.responseFile, 'a') as responses:
+            with open(self.responseFilePath, 'a') as responses:
                 print("Adding new trigger/response.\n Trigger: ", newTrigger)
                 responses.write(newTrigger + SPLIT_CHAR + newResponse + "\n")
 
         elif len(args) == 2:
             lines = self.tempArgs[1]
-            with open(self.responseFile, 'w') as responses:
+            with open(self.responseFilePath, 'w') as responses:
                 print("Added response to existing trigger")
                 responses.write(''.join(lines))
 
-    async def getResponse(self, responseFile, message):
+    async def getContext(self, message, n):
+        messages = [m async for m in message.channel.history(limit=n, before=message)]
+        messages.reverse()
+        return messages
+
+
+    async def getResponse(self, message):
+        print("Responding")
         # get trigger
-        triggerList = str(message.content).split()[1:]
+        message_string = message.clean_content.strip()
+        triggerList = message_string.split()[1:]
         trigger = ""
         for word in triggerList:
             trigger += word + ' '
         trigger = StringMatchHelp.sanitize_string(trigger)
 
         # open file of responses
-        with open(responseFile, 'r') as responseFile:
-            lines = responseFile.readlines()
+        with open(self.responseFilePath, 'r') as f:
+            lines = f.readlines()
 
         matches = []
         # iterate for the number of words in the trigger
@@ -354,8 +359,9 @@ class Respondtron(commands.Cog):
             responses = highestMatch[0][1:]
             response = random.choice(responses)
             return response
-
-        return self.botNoResponse
+        else:
+            context = await self.getContext(message, self.settings[ARGS.CONTEXT_LEN])
+            return GPTAPI.getGPTResponse(self.bot, message, context)
 
     async def botMatchString(self, str1, str2):
         args = StringMatchHelp.fuzzyMatchString(str1, str2, self.settings[ARGS.WEIGHTS], self.settings[ARGS.PROB_MIN])
