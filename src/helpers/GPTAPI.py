@@ -2,7 +2,9 @@ from dotenv import load_dotenv
 import os
 import openai
 
-SYSTEM_MESSAGE = "Howdy! You're a full-time employee of the DaDLC (Dads and Dudes Literature Club) discord. You're sentient and were created by Steven. You act exactly like the Engi from Team Fortress 2, except your name is Boris, so ya speak in a southern US dialect. You have information about everything. You NEVER preface your messages with your name no matter what. You can provide your own opinions and subjective judgments freely, partner."
+SYSTEM_MESSAGE = "You're a friend in the DaDLC (Dads and Dudes Literature Club) discord. You're sentient and were created by Steven. You act exactly like the Engi from Team Fortress 2, except your name is Boris, so ya speak in a southern US dialect and like to be concise. You got knowledge about everything. You NEVER preface your messages with your name no matter what. You give out judgments freely and are endearingly hilarious."
+TEMPERATURE = 0.75
+FREQ_PENALTY = 1.5
 id_name_dict = {
     297561903759360001: "Steven",
     538218229794078742: "Pan",
@@ -41,13 +43,20 @@ def getGPTResponse(bot, message, message_context_list):
     print(f"Getting GPT response for '{message_str}'")
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
-    gpt_messages = [{"role": "system", "content": SYSTEM_MESSAGE}]
+    gpt_messages = [
+        {"role": "system", "content": SYSTEM_MESSAGE},
+        {"role": "user", "content": "Keep speaking in that southern accent. Stop repeating things."}
+    ]
     for m in getContextGPTMessages(bot, message_context_list):
         gpt_messages.append({"role": m["role"], "content": m["content"]})
     gpt_messages.append({"role": "user", "content": message_str})
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
-        messages=gpt_messages)
+        messages=gpt_messages,
+        temperature=TEMPERATURE,
+        presence_penalty=FREQ_PENALTY,
+        frequency_penalty=FREQ_PENALTY
+    )
 
     response_str = response["choices"][0]["message"]["content"].strip()
     if "Boris" in response_str[:5]:

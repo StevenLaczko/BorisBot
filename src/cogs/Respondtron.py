@@ -1,3 +1,8 @@
+import datetime
+from typing import Union
+
+import discord
+
 from src.helpers import DiscordBot
 import re
 import sys
@@ -31,6 +36,7 @@ GOOD_VOTE = "good"
 BAD_VOTE = "bad"
 SETTINGS_FILE = "settings"
 
+
 # TODO Add undo (at least to addResponse)
 class Respondtron(commands.Cog):
     responseFilePath = ""
@@ -50,6 +56,7 @@ class Respondtron(commands.Cog):
         self.responseFilePath = DiscordBot.getFilePath(responseFile)
         self.botNoResponse = botNoResponse
         self.loadSettings(args)
+        self.currentConvoChannels: dict[int, Union[datetime.datetime, None]] = {}
 
         # create backup of responses
         print("Backing up response file")
@@ -96,7 +103,19 @@ class Respondtron(commands.Cog):
 
     # on_message listens for incoming messages starting with an @(botname) and then responds to them
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message):
+        # consider conversations over after 3 minutes of boris not responding
+        now = datetime.datetime.now()
+        for c in self.currentConvoChannels:
+            dt = datetime.timedelta(0, 0, 0, 0, 3)
+            if self.currentConvoChannels[c] + dt < now:
+                print(f"3 minutes passed. Ending convo in {message.guild.get_channel(c).name}")
+                self.currentConvoChannels[c] = None
+
+        botID = self.bot.user.id
+        if message.author.id == botID:
+            return
+
         # Boris responding to messages when he was waiting for input from someone
         # TODO allow multiple users to do this at once. Currently only allows one, as it uses tempArgs[0] for the user's name
         if self.state == STATES.AWAITING_INPUT and message.author == self.tempArgs[0]:
@@ -109,21 +128,26 @@ class Respondtron(commands.Cog):
                 await message.add_reaction('❌')
                 self.state = STATES.NOMINAL
 
-        botID = self.bot.user.id
-        for m in message.mentions:
-            if botID == m.id:
-                print(self.bot.user.name + " mention DETECTED")
-
-                # get and send response
+        mention_ids = [m.id for m in message.mentions]
+        if botID in mention_ids:
+            print(self.bot.user.name + " mention DETECTED")
+            await message.channel.send(await self.getResponse(message))
+        elif "boris" in message.clean_content.lower():
+            print("I heard my name.")
+            if self.currentConvoChannels[message.channel.id] or 0.2 > random.random():
+                await message.channel.send(await self.getResponse(message))
+        elif self.currentConvoChannels[message.channel.id]:
+            print("Message received in convo channel")
+            if 0.5 > random.random():
                 response = await self.getResponse(message)
-                if response is not None:
-                    print("Response: " + response)
-                    await message.channel.send(response)
-                else:
-                    await message.channel.send(self.botNoResponse)
+                await message.channel.send(response)
+        elif 0.05 > random.random():
+            await message.channel.send(await self.getResponse(message))
 
     @commands.Cog.listener()
     async def on_error(event, *args, **kwargs):
+        print("ERROR")
+        print(args)
         with open('../../err.log', 'a') as f:
             if event == 'on_message':
                 f.write("Unhandled message: " + str(args[0]) + "\n")
@@ -315,13 +339,23 @@ class Respondtron(commands.Cog):
                 responses.write(''.join(lines))
 
     async def getContext(self, message, n):
-        messages = [m async for m in message.channel.history(limit=n, before=message)]
-        messages.reverse()
-        return messages
+        word_count = 0
+        all_messages = []
+        # Keep getting messages until the word count reach 100
+        while word_count < 100:
+            messages: list[discord.Message] = [m async for m in message.channel.history(limit=n, before=message)]
+            message = messages[-1]
+            for m in messages:
+                word_count += len(m.clean_content.split())
+            messages.reverse()
+            all_messages.extend(messages)
 
+        print("Number of messages looked at:", len(all_messages))
+        return all_messages
 
     async def getResponse(self, message):
         print("Responding")
+        self.currentConvoChannels[message.channel.id] = datetime.datetime.now()
         # get trigger
         message_string = message.clean_content.strip()
         triggerList = message_string.split()[1:]
@@ -346,6 +380,7 @@ class Respondtron(commands.Cog):
             if matchArgs[0]:
                 matches.append((lineEntries, matchArgs[1]))  # save the chopped up line and the match probability
 
+        response = ""
         print("Matches: ", matches)
         # if there are any matches, choose the one with the highest probability
         if len(matches) > 0:
@@ -358,10 +393,12 @@ class Respondtron(commands.Cog):
             # get random response from list
             responses = highestMatch[0][1:]
             response = random.choice(responses)
-            return response
         else:
             context = await self.getContext(message, self.settings[ARGS.CONTEXT_LEN])
-            return GPTAPI.getGPTResponse(self.bot, message, context)
+            response = GPTAPI.getGPTResponse(self.bot, message, context)
+
+        print("Response: " + response)
+        return response
 
     async def botMatchString(self, str1, str2):
         args = StringMatchHelp.fuzzyMatchString(str1, str2, self.settings[ARGS.WEIGHTS], self.settings[ARGS.PROB_MIN])

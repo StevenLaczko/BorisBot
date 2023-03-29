@@ -11,7 +11,7 @@ RESPONDTRON_ARGS = {Respondtron.ARGS.WEIGHTS: WEIGHTS,
                     Respondtron.ARGS.PROB_MIN: PROB_MIN,
                     Respondtron.ARGS.DEBUG_CHANNEL_ID: 696863794743345152,
                     Respondtron.ARGS.ENABLE_AUTO_WEIGHTS: True,
-                    Respondtron.ARGS.CONTEXT_LEN: 8}
+                    Respondtron.ARGS.CONTEXT_LEN: 5}
 
 # ReminderCog
 REMINDER_FILE_NAME = "reminders.pkl"
