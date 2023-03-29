@@ -1,0 +1,14 @@
+### This is Boris!
+He's a chatbot that uses the ChatGPT API to speak naturally. He literally helps me code him.
+
+He also has a reminder functionality. At the moment, this will link you to your original reminder request at the time
+you specify.
+
+## SETUP
+Place secret keys in a .env file at the root directory like so:
+OPENAI_API_KEY=(key without parentheses)
+DISCORD_TOKEN=(token without parentheses)
+
+Then run
+`pip install -r requirements.txt`
+`python3 RunBoris.py`
