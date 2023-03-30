@@ -1,0 +1,12 @@
+.env
+.venv/**
+.venv
+pyvenv.cfg
+data
+data/**
+.idea/*
+.idea/**
+**/__pycache__*
+*/__pycache__*
+err.log
+obj/*

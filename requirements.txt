@@ -1,0 +1,8 @@
+discord
+fuzzywuzzy
+selenium
+requests
+pytz
+python-dateutil
+python-dotenv
+openai

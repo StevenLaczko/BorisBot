@@ -29,6 +29,9 @@ class DiscordBot(commands.Bot):
             await self.add_cog(c)
 
     async def on_error(self, event, *args, **kwargs):
+        print("ERROR")
+        print(event)
+        print(args)
         with open('err.log', 'a') as f:
             if event == 'on_message':
                 f.write("Unhandled message: " + str(args[0]) + "\n")

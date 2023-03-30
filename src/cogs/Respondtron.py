@@ -1,7 +1,10 @@
 import datetime
+import json
+import os
 from typing import Union
 
 import discord
+import pytz
 
 from src.helpers import DiscordBot
 import re
@@ -35,6 +38,13 @@ CONTEXT_LEN_DEF = 5
 GOOD_VOTE = "good"
 BAD_VOTE = "bad"
 SETTINGS_FILE = "settings"
+MAX_CONTEXT_WORDS = 100
+MAX_CONVO_WORDS = 250
+CONVO_END_DELAY = datetime.timedelta(minutes=5)
+RESPONSE_FILENAME = "responses.txt"
+MEMORY_FILENAME = "memories.json"
+with open(DiscordBot.getFilePath("settings.json")) as f:
+    IGNORE_LIST = json.loads(f.read())["ignore_list"]
 
 
 # TODO Add undo (at least to addResponse)
@@ -51,22 +61,25 @@ class Respondtron(commands.Cog):
     tempArgs = None
     state = STATES.NOMINAL
 
-    def __init__(self, bot, responseFile, botNoResponse, args=None):
+    def __init__(self, bot, responseFile=RESPONSE_FILENAME, botNoResponse="", args=None, memoryFilename=MEMORY_FILENAME):
         self.bot = bot
         self.responseFilePath = DiscordBot.getFilePath(responseFile)
+        self.memoryFilePath = DiscordBot.getFilePath(memoryFilename)
         self.botNoResponse = botNoResponse
         self.loadSettings(args)
         self.currentConvoChannels: dict[int, Union[datetime.datetime, None]] = {}
+        self.memory: list[str] = []
+
+        # load memories
+        if os.path.isfile(self.memoryFilePath):
+            with open(self.memoryFilePath, 'r') as memoryFile:
+                self.memory: list[str] = json.loads(memoryFile.read())
 
         # create backup of responses
         print("Backing up response file")
         with open(self.responseFilePath, 'r') as responses:
             with open(self.responseFilePath, 'w+') as backup:
                 backup.write(responses.read())
-        # try:
-        #     self.loadSettings(load_obj(SETTINGS_FILE))
-        # except FileNotFoundError:
-        #     print("No settings file")
 
     # SETTERS
 
@@ -107,10 +120,12 @@ class Respondtron(commands.Cog):
         # consider conversations over after 3 minutes of boris not responding
         now = datetime.datetime.now()
         for c in self.currentConvoChannels:
-            dt = datetime.timedelta(0, 0, 0, 0, 3)
+            if not self.currentConvoChannels[c]:
+                continue
+            dt = CONVO_END_DELAY
             if self.currentConvoChannels[c] + dt < now:
-                print(f"3 minutes passed. Ending convo in {message.guild.get_channel(c).name}")
-                self.currentConvoChannels[c] = None
+                channel = message.guild.get_channel(c)
+                await self.stopConversation(channel)
 
         botID = self.bot.user.id
         if message.author.id == botID:
@@ -129,25 +144,34 @@ class Respondtron(commands.Cog):
                 self.state = STATES.NOMINAL
 
         mention_ids = [m.id for m in message.mentions]
-        if botID in mention_ids:
+        if "boris stop" in message.clean_content.lower():
+            await self.stopConversation(message.channel)
+        elif botID in mention_ids:
             print(self.bot.user.name + " mention DETECTED")
             await message.channel.send(await self.getResponse(message))
         elif "boris" in message.clean_content.lower():
             print("I heard my name.")
-            if self.currentConvoChannels[message.channel.id] or 0.2 > random.random():
+            if (message.channel.id in self.currentConvoChannels and self.currentConvoChannels[message.channel.id]) or 0.2 > random.random():
                 await message.channel.send(await self.getResponse(message))
-        elif self.currentConvoChannels[message.channel.id]:
+        elif message.channel.id in self.currentConvoChannels and self.currentConvoChannels[message.channel.id]:
             print("Message received in convo channel")
-            if 0.5 > random.random():
+            if 0.3 > random.random():
                 response = await self.getResponse(message)
                 await message.channel.send(response)
         elif 0.05 > random.random():
             await message.channel.send(await self.getResponse(message))
 
+    async def stopConversation(self, channel):
+        print(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
+        self.currentConvoChannels[channel.id] = None
+        if 0.3 > random.random():
+            await self.storeMemory(await self.getConvoContext(channel, IGNORE_LIST))
+
     @commands.Cog.listener()
     async def on_error(event, *args, **kwargs):
         print("ERROR")
         print(args)
+        print(kwargs)
         with open('../../err.log', 'a') as f:
             if event == 'on_message':
                 f.write("Unhandled message: " + str(args[0]) + "\n")
@@ -338,20 +362,53 @@ class Respondtron(commands.Cog):
                 print("Added response to existing trigger")
                 responses.write(''.join(lines))
 
-    async def getContext(self, message, n):
-        word_count = 0
+    async def getContext(self, channel, before, n=5, max_word_count=MAX_CONTEXT_WORDS, ignore_list=None):
+        print("Getting context")
         all_messages = []
+        now = datetime.datetime.now(tz=pytz.UTC)
+        past_cutoff = now - datetime.timedelta(minutes=30)
         # Keep getting messages until the word count reach 100
-        while word_count < 100:
-            messages: list[discord.Message] = [m async for m in message.channel.history(limit=n, before=message)]
-            message = messages[-1]
-            for m in messages:
+        word_count = 0
+        do_repeat = True
+        while do_repeat:
+            messages: list[discord.Message] = []
+            async for m in channel.history(limit=n, after=past_cutoff, before=before, oldest_first=False):
+                if ignore_list and m.author.id in ignore_list:
+                    continue
+                messages.append(m)
                 word_count += len(m.clean_content.split())
-            messages.reverse()
+            if len(messages) > 0:
+                before = messages[-1]
+
             all_messages.extend(messages)
+            if word_count > max_word_count or len(messages) < n:
+                do_repeat = False
 
         print("Number of messages looked at:", len(all_messages))
+        print("Word count:", word_count)
+        all_messages.reverse()
         return all_messages
+
+    async def getConvoContext(self, channel, max_word_count=MAX_CONVO_WORDS, ignore_list=None):
+        context = []
+        try:
+            message: discord.Message = [m async for m in channel.history(limit=1)][0]
+            context = await self.getContext(channel, before=message.created_at + datetime.timedelta(minutes=5),
+                                            max_word_count=max_word_count, ignore_list=ignore_list)
+        except Exception as e:
+            print("ERROR in getConvoContext")
+            print(e)
+        return context
+
+    async def storeMemory(self, conversation_log):
+        memory = GPTAPI.rememberGPT(self, conversation_log)
+        if memory != "":
+            print(f"Storing memory `{memory}")
+            self.memory.append(memory)
+            with open(self.memoryFilePath, 'w+') as f:
+                f.write(json.dumps(self.memory))
+        else:
+            print(f"Storing no memories from conversation of length {len(conversation_log)}")
 
     async def getResponse(self, message):
         print("Responding")
@@ -394,8 +451,12 @@ class Respondtron(commands.Cog):
             responses = highestMatch[0][1:]
             response = random.choice(responses)
         else:
-            context = await self.getContext(message, self.settings[ARGS.CONTEXT_LEN])
-            response = GPTAPI.getGPTResponse(self.bot, message, context)
+            try:
+                context = await self.getContext(message.channel, message, self.settings[ARGS.CONTEXT_LEN])
+                response = GPTAPI.getGPTResponse(self.bot, message, context, self.memory)
+            except Exception as e:
+                print("ERROR")
+                print(e)
 
         print("Response: " + response)
         return response
