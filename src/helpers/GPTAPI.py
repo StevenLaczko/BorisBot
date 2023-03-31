@@ -216,7 +216,7 @@ def cullMemories(memory, explain=False):
         print(f"Culling memory: '{memory[result - 1]}'")
         culled = memory.pop(result - 1)
         with open(DiscordBot.getFilePath("culled_memories.json"), 'rw+') as f:
-            l: list[str] = json.loads(f.read())
+            l: list[str] = json.loads(f.read()) if f.read() != "" else []
             l.append(culled)
             f.write(json.dumps(l))
 
