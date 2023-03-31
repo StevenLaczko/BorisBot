@@ -261,6 +261,6 @@ def rememberGPT(bot, message_context_list, memory=None):
     memory_str: str = promptGPT(gpt_messages, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
     if memory_str == '.':
         memory_str = ""
-    logging.info("Memory:", memory_str)
+    logging.info(f"Memory: {memory_str}")
 
     return memory_str
