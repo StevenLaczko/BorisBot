@@ -1,9 +1,12 @@
 import discord
 from dotenv import load_dotenv
+import logging
 import os
 import openai
 from src.helpers import DiscordBot
 import json
+
+logging.basicConfig(level=logging.INFO)
 
 SYSTEM_MESSAGE = None
 """You're are identical to the Engi from Team Fortress 2 except your name is Boris, and your consciousness was made by Steven. You speak casually and in a southern accent. You NEVER start your messages with 'Boris:' no matter what. You're just here to hang out and chat. Giving people practical information strokes your engineer ego. You never repeat yourself.
@@ -128,7 +131,7 @@ Never type out "Boris:" at the start of your messages. Never send an empty messa
         {"role": "assistant", "content": "."}
     ]
     message_context_list.append(message)
-    print(f"Getting GPT response for '{message.clean_content}'")
+    logging.info(f"Getting GPT response for '{message.clean_content}'")
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
     gpt_messages = preprompt
@@ -165,10 +168,10 @@ def shrinkMemories(memory, explain=False):
     before_word_count = getMemoryWordCount(memory)
     if before_word_count > MEMORY_WORD_COUNT_MAX/2:
         memory = promptGPT(preprompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"].split('\n')
-        print("Minimized memories.")
+        logging.info("Minimized memories.")
         if getMemoryWordCount(memory) > MEMORY_WORD_COUNT_MAX:
             cullMemories(memory, explain=explain)
-    print(f"Before shrink/cull: {before_word_count} words.\nAfter shrink: {getMemoryWordCount(memory)} words.")
+    logging.info(f"Before shrink/cull: {before_word_count} words.\nAfter shrink: {getMemoryWordCount(memory)} words.")
     return memory
 
 
@@ -190,7 +193,7 @@ def cullMemories(memory, explain=False):
         try:
             if explain:
                 response = promptGPT(prompt)["string"]
-                print(response)
+                logging.info(response)
                 return int(response[-2:].strip())
             else:
                 return int(promptGPT(prompt)["string"])
@@ -204,7 +207,7 @@ def cullMemories(memory, explain=False):
         try:
             result = parse_choice(cull_preprompt, explain)
         except ValueError as e:
-            print(e)
+            logging.error(e)
             if try_count < 1:
                 cull_preprompt.append({"role": "assistant", "content": result})
                 cull_preprompt.append({"role": "user", "content": "Only type a number and nothing else."})
@@ -213,7 +216,7 @@ def cullMemories(memory, explain=False):
         success = True
 
     if success:
-        print(f"Culling memory: '{memory[result - 1]}'")
+        logging.info(f"Culling memory: '{memory[result - 1]}'")
         culled = memory.pop(result - 1)
         with open(DiscordBot.getFilePath("culled_memories.json"), 'rw+') as f:
             l: list[str] = json.loads(f.read()) if f.read() != "" else []
@@ -223,7 +226,7 @@ def cullMemories(memory, explain=False):
 
         return result if success else None
     else:
-        print("Not culling.")
+        logging.info("Not culling.")
 
 
 def rememberGPT(bot, message_context_list, memory=None):
@@ -258,6 +261,6 @@ def rememberGPT(bot, message_context_list, memory=None):
     memory_str: str = promptGPT(gpt_messages, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
     if memory_str == '.':
         memory_str = ""
-    print("Memory:", memory_str)
+    logging.info("Memory:", memory_str)
 
     return memory_str

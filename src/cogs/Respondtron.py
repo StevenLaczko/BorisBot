@@ -354,6 +354,13 @@ class Respondtron(commands.Cog):
                 print("Added response to existing trigger")
                 responses.write(''.join(lines))
 
+    async def searchMessages(self, searchTerm):
+        # TODO idea
+        # Ask GPT for a rating from 0-100 for if we should search for a term,
+        # or just trigger when "said" is in a message,
+        # then search the server for the term, and give it to Boris (in a memory) for extra response context.
+        pass
+
     async def getContext(self, channel, before, after=False, n=5, max_word_count=MAX_CONTEXT_WORDS, ignore_list=None):
         print("Getting context")
         all_messages = []
