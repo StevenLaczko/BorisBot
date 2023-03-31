@@ -39,7 +39,8 @@ GOOD_VOTE = "good"
 BAD_VOTE = "bad"
 SETTINGS_FILE = "settings"
 MAX_CONTEXT_WORDS = 100
-MAX_CONVO_WORDS = 250
+MAX_CONVO_WORDS = 200
+MEMORY_CHANCE = 1
 CONVO_END_DELAY = datetime.timedelta(minutes=5)
 RESPONSE_FILENAME = "responses.txt"
 MEMORY_FILENAME = "memories.json"
@@ -164,22 +165,8 @@ class Respondtron(commands.Cog):
     async def stopConversation(self, channel):
         print(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
         self.currentConvoChannels[channel.id] = None
-        if 0.3 > random.random():
-            await self.storeMemory(await self.getConvoContext(channel, IGNORE_LIST))
-
-    @commands.Cog.listener()
-    async def on_error(event, *args, **kwargs):
-        print("ERROR")
-        print(args)
-        print(kwargs)
-        with open('../../err.log', 'a') as f:
-            if event == 'on_message':
-                f.write("Unhandled message: " + str(args[0]) + "\n")
-                # await send_message(696863794743345152, args[0])
-            else:
-                raise
-
-    # COMMANDS
+        if MEMORY_CHANCE > random.random():
+            await self.storeMemory(await self.getConvoContext(channel, after=None, ignore_list=IGNORE_LIST))
 
     # teach
     # teach allows the bot to learn new trigger/response pairs
@@ -256,6 +243,11 @@ class Respondtron(commands.Cog):
     @commands.command(name="weights", help="Sends weights as a message", hidden=True)
     async def weightsCommand(self, ctx):
         await ctx.send(self.settings[ARGS.WEIGHTS])
+
+    @commands.command(name="remember", help="Remember.")
+    @commands.is_owner()
+    async def remember(self, ctx):
+        await self.storeMemory(await self.getConvoContext(ctx.channel, after=None,  ignore_list=IGNORE_LIST))
 
     # METHODS
 
@@ -362,17 +354,19 @@ class Respondtron(commands.Cog):
                 print("Added response to existing trigger")
                 responses.write(''.join(lines))
 
-    async def getContext(self, channel, before, n=5, max_word_count=MAX_CONTEXT_WORDS, ignore_list=None):
+    async def getContext(self, channel, before, after=False, n=5, max_word_count=MAX_CONTEXT_WORDS, ignore_list=None):
         print("Getting context")
         all_messages = []
         now = datetime.datetime.now(tz=pytz.UTC)
-        past_cutoff = now - datetime.timedelta(minutes=30)
+        if after is False:
+            past_cutoff = now - datetime.timedelta(minutes=30)
+            after = past_cutoff
         # Keep getting messages until the word count reach 100
         word_count = 0
         do_repeat = True
         while do_repeat:
             messages: list[discord.Message] = []
-            async for m in channel.history(limit=n, after=past_cutoff, before=before, oldest_first=False):
+            async for m in channel.history(limit=n, after=after, before=before, oldest_first=False):
                 if ignore_list and m.author.id in ignore_list:
                     continue
                 messages.append(m)
@@ -389,24 +383,32 @@ class Respondtron(commands.Cog):
         all_messages.reverse()
         return all_messages
 
-    async def getConvoContext(self, channel, max_word_count=MAX_CONVO_WORDS, ignore_list=None):
+    async def getConvoContext(self, channel, before=False, after: Union[discord.Message, datetime.datetime, None, bool] = False, max_word_count=MAX_CONVO_WORDS, ignore_list=None):
         context = []
         try:
-            message: discord.Message = [m async for m in channel.history(limit=1)][0]
-            context = await self.getContext(channel, before=message.created_at + datetime.timedelta(minutes=5),
+            message: discord.Message = [m async for m in channel.history(limit=2)][1] # second to last message to start
+        except IndexError as e:
+            print(e)
+            print("Not enough messages in channel to get context.")
+            return []
+        if before is False:
+            before = message.created_at + datetime.timedelta(minutes=5)
+        try:
+            context = await self.getContext(channel, before=before, after=after,
                                             max_word_count=max_word_count, ignore_list=ignore_list)
         except Exception as e:
-            print("ERROR in getConvoContext")
+            print("ERROR in getContext")
             print(e)
         return context
 
     async def storeMemory(self, conversation_log):
-        memory = GPTAPI.rememberGPT(self, conversation_log)
-        if memory != "":
+        memory = GPTAPI.rememberGPT(self, conversation_log, self.memory)
+        if memory != "" and memory is not None:
             print(f"Storing memory `{memory}")
             self.memory.append(memory)
-            with open(self.memoryFilePath, 'w+') as f:
-                f.write(json.dumps(self.memory))
+            self.memory = GPTAPI.shrinkMemories(self.memory, explain=True)
+            with open(self.memoryFilePath, 'w+') as memoryFile:
+                memoryFile.write(json.dumps(self.memory))
         else:
             print(f"Storing no memories from conversation of length {len(conversation_log)}")
 
@@ -451,12 +453,8 @@ class Respondtron(commands.Cog):
             responses = highestMatch[0][1:]
             response = random.choice(responses)
         else:
-            try:
-                context = await self.getContext(message.channel, message, self.settings[ARGS.CONTEXT_LEN])
-                response = GPTAPI.getGPTResponse(self.bot, message, context, self.memory)
-            except Exception as e:
-                print("ERROR")
-                print(e)
+            context = await self.getContext(message.channel, message, max_word_count=self.settings[ARGS.CONTEXT_LEN])
+            response = GPTAPI.getGPTResponse(self.bot, message, context, self.memory)
 
         print("Response: " + response)
         return response
