@@ -16,6 +16,10 @@ RESPONDTRON_ARGS = {Respondtron.ARGS.WEIGHTS: WEIGHTS,
 REMINDER_FILE_NAME = "reminders.pkl"
 MESSAGE_FLAG = "-m"
 
+EXTENSIONS = [
+    "src.BorisCommands"
+]
+
 
 # mafiaCog = MafiaCog.Mafia(bot, None, None)
 # gptTest = GPT_Test.GPT_Test(bot)
@@ -28,9 +32,9 @@ class Boris(DiscordBot.DiscordBot):
         self.event(self.on_member_join)
 
     # override parent class
-    async def on_ready(self, extensions=None):
+    async def on_ready(self):
         await super().on_ready()
-        await self.load_extension("src.BorisCommands")
+        await self.load_extensions(EXTENSIONS)
         await self.add_default_cogs()
 
     async def add_default_cogs(self):

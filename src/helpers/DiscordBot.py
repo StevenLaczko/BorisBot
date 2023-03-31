@@ -1,9 +1,15 @@
 import os
+import sys
+import traceback
+
 from discord.ext import commands
 import discord.ext.tasks
 import discord
 
 DATA_PATH = "data"
+EXTENSIONS = [
+    "src.helpers.DiscordBotCommands"
+]
 
 
 class DiscordBot(commands.Bot):
@@ -19,9 +25,14 @@ class DiscordBot(commands.Bot):
     async def on_command(self, ctx):
         print(f"Command: {ctx}")
 
+    async def load_extensions(self, extensions):
+        for e in extensions:
+            if e not in self.extensions:
+                await self.load_extension(e)
+
     async def on_ready(self):
         print("Bot has connected to Discord!")
-        await self.load_extension("src.helpers.DiscordBotCommands")
+        await self.load_extensions(EXTENSIONS)
 
     async def add_cogs(self, cogs):
         print("Adding cogs.")
@@ -29,9 +40,9 @@ class DiscordBot(commands.Bot):
             await self.add_cog(c)
 
     async def on_error(self, event, *args, **kwargs):
-        print("ERROR")
-        print(event)
-        print(args)
+        print(sys.exc_info()[0])
+        print(sys.exc_info()[1])
+        traceback.print_tb(sys.exc_info()[2])
         with open('err.log', 'a') as f:
             if event == 'on_message':
                 f.write("Unhandled message: " + str(args[0]) + "\n")
