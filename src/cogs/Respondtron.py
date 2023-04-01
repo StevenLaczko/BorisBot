@@ -159,6 +159,7 @@ class Respondtron(commands.Cog):
             if 0.3 > random.random():
                 response = await self.getResponse(message)
                 await message.reply(response)
+        #TODO 5% chance asks GPT if it's relevant to Boris or his memories
         elif 0.05 > random.random():
             await message.reply(await self.getResponse(message))
 
@@ -442,7 +443,7 @@ class Respondtron(commands.Cog):
         if not _mood:
             _mood = self.mood
         context = await self.getContext(message.channel, message, max_word_count=max_word_count)
-        return self.parseGPTResponse(*GPTAPI.getGPTResponse(self.bot, message, context, _memory, mood=_mood))
+        return self.parseGPTResponse(*await GPTAPI.getGPTResponse(self.bot, message, context, _memory, mood=_mood))
 
     async def getResponse(self, message):
         logging.info("Responding")

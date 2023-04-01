@@ -45,10 +45,12 @@ FORMAT_COMMANDS = [
     "Never type out \"Boris:\" at the start of your messages. Never send an empty message."
 ]
 
-COMMAND_INSTRUCTIONS = """You have access to a Remember and a Mood command. You can use one, both, or neither of the commands. When you want to remember something or set your own Mood, use this format:
+MOOD_COMMAND = "/mood"
+REMEMBER_COMMAND = "/remember"
+COMMAND_INSTRUCTIONS = f"""You have access to a Remember and a Mood command. You can use one, both, or neither of the commands. When you want to remember something or set your own Mood, use this format:
 ```example
-Mood: [single word to describe mood]
-Remember: [text to remember]
+{MOOD_COMMAND} [single word to describe mood]
+{REMEMBER_COMMAND} [text to remember]
 [boris' response to the chatlog]
 ```"""
 
@@ -117,7 +119,7 @@ def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[
     return result
 
 
-def getContextGPTPlainMessages(bot, messages: list[discord.Message]):
+def getContextGPTPlainMessages(bot, messages: list[discord.Message]) -> str:
     result_str = ""
 
     for m in messages:
@@ -182,7 +184,7 @@ def getMoodString(mood: (str, str)):
         return ""
 
 
-def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message], memory: list[str],
+async def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message], memory: list[str],
                    mood: (str, str) = None):
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
@@ -209,16 +211,16 @@ def getGPTResponse(bot, message: discord.Message, message_context_list: list[dis
     new_mood = None
     new_memory = None
     for l in response_split:
-        if l.startswith("Remember: "):
-            new_memory = l[len("Remember: "):]
+        if l.startswith(REMEMBER_COMMAND):
+            new_memory = l[len(REMEMBER_COMMAND):]
+            await message.add_reaction('🤔')
             logging.info(f"Remembering: {new_memory}")
-        elif l.startswith("Mood: "):
-            new_mood = l[len("Mood: "):]
+        elif l.startswith(MOOD_COMMAND):
+            new_mood = l[len(MOOD_COMMAND):]
+            await message.add_reaction('☝️')
             logging.info(f"Mood set to: {new_mood}")
         elif len(l) > 0:
-            response_str = l
-    if response_str == "":
-        message.add_reaction('🤔')
+            response_str += l
 
     # todo
     # if response["reason"] == "max_tokens":
@@ -229,7 +231,11 @@ def getGPTResponse(bot, message: discord.Message, message_context_list: list[dis
 
 def getMood(bot, message_context_list, memory) -> (str, str):
     chatlog = getContextGPTPlainMessages(bot, message_context_list)
-    prompt = buildGPTMessageLog(getMemoryString(memory), MOOD_PREPROMPT, MOOD_FORMAT_COMMANDS, CONFIRM_UNDERSTANDING)
+    prompt = buildGPTMessageLog(getMemoryString(memory),
+                                chatlog,
+                                MOOD_PREPROMPT,
+                                MOOD_FORMAT_COMMANDS,
+                                CONFIRM_UNDERSTANDING)
     result = promptGPT(prompt)["string"].split('\n')
     if len(result) > 2:
         return None
