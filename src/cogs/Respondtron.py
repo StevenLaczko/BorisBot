@@ -41,9 +41,10 @@ SETTINGS_FILE = "settings"
 MAX_CONTEXT_WORDS = 100
 MAX_CONVO_WORDS = 200
 MEMORY_CHANCE = 1
-CONVO_END_DELAY = datetime.timedelta(minutes=5)
+CONVO_END_DELAY = datetime.timedelta(minutes=3)
 RESPONSE_FILENAME = "responses.txt"
 MEMORY_FILENAME = "memories.json"
+
 with open(DiscordBot.getFilePath("settings.json")) as f:
     IGNORE_LIST = json.loads(f.read())["ignore_list"]
 
@@ -156,6 +157,7 @@ class Respondtron(commands.Cog):
                 await message.reply(await self.getResponse(message))
         elif message.channel.id in self.currentConvoChannels and self.currentConvoChannels[message.channel.id]:
             logging.warning("Message received in convo channel")
+            self.currentConvoChannels[message.channel.id] = datetime.datetime.now()
             if 0.3 > random.random():
                 response = await self.getResponse(message)
                 await message.reply(response)
@@ -364,10 +366,12 @@ class Respondtron(commands.Cog):
         # then search the server for the term, and give it to Boris (in a memory) for extra response context.
         pass
 
-    async def getContext(self, channel, before, after=False, n=5, max_word_count=MAX_CONTEXT_WORDS, ignore_list=None):
+    async def getContext(self, channel, before, after=False, num_messages_requested=None, max_word_count=MAX_CONTEXT_WORDS, ignore_list=None):
         logging.info("Getting context")
         all_messages = []
         now = datetime.datetime.now(tz=pytz.UTC)
+        if num_messages_requested is None:
+            num_messages_requested = self.settings[ARGS.CONTEXT_LEN]
         if after is False:
             past_cutoff = now - datetime.timedelta(minutes=30)
             after = past_cutoff
@@ -376,7 +380,7 @@ class Respondtron(commands.Cog):
         do_repeat = True
         while do_repeat:
             messages: list[discord.Message] = []
-            async for m in channel.history(limit=n, after=after, before=before, oldest_first=False):
+            async for m in channel.history(limit=num_messages_requested, after=after, before=before, oldest_first=False):
                 if ignore_list and m.author.id in ignore_list:
                     continue
                 messages.append(m)
@@ -385,7 +389,7 @@ class Respondtron(commands.Cog):
                 before = messages[-1]
 
             all_messages.extend(messages)
-            if word_count > max_word_count or len(messages) < n:
+            if word_count > max_word_count or len(messages) < num_messages_requested:
                 do_repeat = False
 
         logging.info(f"Number of messages looked at: {len(all_messages)}")
@@ -427,6 +431,7 @@ class Respondtron(commands.Cog):
 
     async def setMood(self, conversation_log):
         self.mood = GPTAPI.getMood(self, conversation_log, self.memory)
+        logging.info(f"Setting mood from convo to {self.mood}")
 
     def parseGPTResponse(self, _response_str, new_memory, new_mood):
         if new_memory:
@@ -437,7 +442,7 @@ class Respondtron(commands.Cog):
 
     async def getGPTResponse(self, message, max_word_count=None, _memory=None, _mood=None):
         if not max_word_count:
-            max_word_count = self.settings[ARGS.CONTEXT_LEN]
+            max_word_count = MAX_CONTEXT_WORDS
         if not _memory:
             _memory = self.memory
         if not _mood:

@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import logging
 import os
 import openai
+import pytz, datetime
 from src.helpers import DiscordBot
 import json
 
@@ -17,6 +18,8 @@ class Role(enum.Enum):
     ASSISTANT = "assistant"
     SYSTEM = "system"
 
+
+DATETIME_FSTRING = "%m/%d/%Y %I:%M%p"
 
 SYSTEM_MESSAGE = None
 CHARACTER_PROMPT = [
@@ -42,16 +45,16 @@ RESPONSE_EXAMPLE = [
 ]
 FORMAT_COMMANDS = [
     "I'm gonna give ya a chat log and you're gonna respond with a single message as Boris. You will write no explanation or anything else, ya hear? Always speak in a southern dialect like the Engi, with colloquialisms.",
-    "Never type out \"Boris:\" at the start of your messages. Never send an empty message."
+    "Never type out \"Boris:\" at the start of your messages."
 ]
 
 MOOD_COMMAND = "/mood"
 REMEMBER_COMMAND = "/remember"
-COMMAND_INSTRUCTIONS = f"""You have access to a Remember and a Mood command. You can use one, both, or neither of the commands. When you want to remember something or set your own Mood, use this format:
+COMMAND_INSTRUCTIONS = f"""You have access to a Remember and a Mood command. You can use one, both, or neither of the commands. Always use the "/remember" command to remember something. Always use it if asked to remember something. Don't remember the same thing twice. Soda wants you to use the /mood command often. Always use newlines between each command and your response.  To remember something or set your own Mood, use this format:
 ```example
-{MOOD_COMMAND} [single word to describe mood]
-{REMEMBER_COMMAND} [text to remember]
 [boris' response to the chatlog]
+{MOOD_COMMAND} Happy
+{REMEMBER_COMMAND} "My name is Boris"
 ```"""
 
 CONFIRM_UNDERSTANDING = [
@@ -87,11 +90,14 @@ def promptGPT(gptMessages, temperature=TEMPERATURE, frequency_penalty=FREQ_PENAL
 
 
 def getMessageStr(bot, message, writeBotName=False):
+    local_tz = pytz.timezone("America/New_York")
+    local_timestamp = message.created_at.astimezone(local_tz)
+    local_timestamp_str = local_timestamp.strftime("%m/%d/%Y %I:%M%p")
     if writeBotName or bot.user.id != message.author.id:
-        name = id_name_dict[message.author.id] if message.author.id in id_name_dict else None
+        name = id_name_dict[str(message.author.id)] if str(message.author.id) in id_name_dict else None
         nick_str = message.author.name
         name_str = f"{name} (AKA {nick_str})" if name else nick_str
-        result = f"{name_str}: {message.clean_content}"
+        result = f"{name_str} ({local_timestamp_str}): {message.clean_content}"
     else:
         result = message.clean_content
 
@@ -101,7 +107,7 @@ def getMessageStr(bot, message, writeBotName=False):
 def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[dict[str, str]]:
     result = []
     if role is None:
-        logging.warning("Assuming 'user' role for GPT message creation.")
+        logging.debug("Assuming 'user' role for GPT message creation.")
         role = Role.USER
     role = role.value
     if isinstance(_input, str):
@@ -156,7 +162,7 @@ def getContextGPTChatlog(bot, messages: list[discord.Message]):
 
 def getMemoryString(memory: list[str]) -> str:
     if len(memory) != 0:
-        memory_str = f"Here are your preexisting memories as Boris:\n```"
+        memory_str = f"Only list these if Steven asks you to. Here are your preexisting memories as Boris:\n```"
         for m in memory:
             if not m:
                 continue
@@ -176,35 +182,41 @@ def buildGPTMessageLog(*args):
 
 
 def getMoodString(mood: (str, str)):
+    result = ""
     if len(mood) != 0:
         result = f"Boris' current mood is {mood[0]}"
         if len(mood[1]) > 0:
             result += f" because: {mood[1]}"
-    else:
-        return ""
+        result += "\nRespond in that manner."
+    logging.info(f"Current mood is {mood}")
+    return ""
+
+
+def getCurrentTimeString():
+    return f"Current date/time: {datetime.datetime.now().strftime(DATETIME_FSTRING)}"
 
 
 async def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message], memory: list[str],
-                   mood: (str, str) = None):
+                         mood: (str, str) = None):
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
     if not mood:
         mood = []
-    preprompt = buildGPTMessageLog(DIALECT_EXAMPLES,
+    message_context_list.append(message)
+    prompt = buildGPTMessageLog(DIALECT_EXAMPLES,
                                    CHARACTER_PROMPT,
                                    getMemoryString(memory),
+                                   getCurrentTimeString(),
                                    getMoodString(mood),
                                    RESPONSE_EXAMPLE,
                                    COMMAND_INSTRUCTIONS,
                                    FORMAT_COMMANDS,
-                                   CONFIRM_UNDERSTANDING)
-    gpt_messages = preprompt
-    message_context_list.append(message)
-    gpt_messages.extend(getContextGPTChatlog(bot, message_context_list))
+                                   CONFIRM_UNDERSTANDING,
+                                   getContextGPTChatlog(bot, message_context_list))
 
     logging.info(f"Getting GPT response for '{message.clean_content}'")
-    logging.info(str(gpt_messages))
-    response_str: str = promptGPT(gpt_messages, TEMPERATURE, FREQ_PENALTY)["string"]
+    response_str: str = promptGPT(prompt, TEMPERATURE, FREQ_PENALTY)["string"]
+    logging.debug(f"GPT response:\n```\n{response_str}\n```")
 
     response_split = response_str.split('\n')
     response_str = ""
@@ -217,7 +229,7 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
             logging.info(f"Remembering: {new_memory}")
         elif l.startswith(MOOD_COMMAND):
             new_mood = l[len(MOOD_COMMAND):]
-            await message.add_reaction('☝️')
+            await message.add_reaction('☝')
             logging.info(f"Mood set to: {new_mood}")
         elif len(l) > 0:
             response_str += l
