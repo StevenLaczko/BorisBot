@@ -57,7 +57,7 @@ CONFIRM_UNDERSTANDING = [
     {"role": "assistant", "content": "."}
 ]
 
-MEMORY_PREPROMPT = "I am going to give you a list of statements. Lower the word count while retaining all details. Explain nothing and respond only with the shorter list of statements separated by newlines. Keep each memory separate. Always keep names."
+MEMORY_PREPROMPT = "I am going to give you a list of statements. Lower the word count. Keep all details, no matter how small. Just rewrite to lower the word count. Explain nothing and respond only with the shorter list of statements separated by newlines. Keep each memory separate. Always keep names."
 
 MOOD_PREPROMPT = "I am going to give you a list of statements. You are the AI friend Boris in the log. Determine what mood Boris should have after having the following conversation and give a reason."
 
