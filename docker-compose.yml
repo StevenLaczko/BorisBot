@@ -5,9 +5,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: always
     volumes:
-      - data:/app/data
-      - obj:/app/obj
+      - ./data:/app/data
+      - ./obj:/app/obj
     env_file:
       - .env
 
