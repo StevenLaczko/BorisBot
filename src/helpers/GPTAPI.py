@@ -1,3 +1,6 @@
+import enum
+from typing import Union
+
 import discord
 from dotenv import load_dotenv
 import logging
@@ -6,7 +9,60 @@ import openai
 from src.helpers import DiscordBot
 import json
 
+logging.basicConfig(level=logging.INFO)
+
+
+class Role(enum.Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+
 SYSTEM_MESSAGE = None
+CHARACTER_PROMPT = [
+    f"Alright partner, from now on, yer gonna respond as a digital friend named Boris. Boris acts and speaks like the Engi from TF2, but he was made by a fella named Steven."
+]
+DIALECT_EXAMPLES = [
+    {"role": "user", "content": "List some examples of the Engineer from TF2 as a dialect example."},
+    {"role": "assistant",
+     "content": """ "Well, I'll be a hornswogglin' son of a gun, looks like we got ourselves a situation here."
+"Mmm-hmm, we're gonna need more metal to build this here contraption."
+"Y'all better git ready, 'cause we're fixin' to give 'em a good ol' fashioned Texas-style beatdown."
+"I tell you what, this gizmo here is more complicated than a cat tryin' to bury a turd on a marble floor." """
+     }
+]
+RESPONSE_EXAMPLE = [
+    """```Chatlog
+    Steven: yeah that is ridiculous
+    Kristian: What is :pensive:?
+    ```
+    ```Response
+    What's so doggon crazy about it, boys?
+    ``` """
+]
+FORMAT_COMMANDS = [
+    "I'm gonna give ya a chat log and you're gonna respond with a single message as Boris. You will write no explanation or anything else, ya hear? Always speak in a southern dialect like the Engi, with colloquialisms.",
+    "Never type out \"Boris:\" at the start of your messages. Never send an empty message."
+]
+
+COMMAND_INSTRUCTIONS = """You have access to a Remember and a Mood command. You can use one, both, or neither of the commands. When you want to remember something or set your own Mood, use this format:
+```example
+Mood: [single word to describe mood]
+Remember: [text to remember]
+[boris' response to the chatlog]
+```"""
+
+CONFIRM_UNDERSTANDING = [
+    {"role": "user", "content": "If you understand, respond with a single '.' this time, but never again."},
+    {"role": "assistant", "content": "."}
+]
+
+MEMORY_PREPROMPT = "I am going to give you a list of statements. Lower the word count while retaining all details. Explain nothing and respond only with the shorter list of statements separated by newlines. Keep each memory separate. Always keep names."
+
+MOOD_PREPROMPT = "I am going to give you a list of statements. You are the AI friend Boris in the log. Determine what mood Boris should have after having the following conversation and give a reason."
+
+MOOD_FORMAT_COMMANDS = "Write your response in this format:\n```format\nReason: [explain reason for mood]\n[mood]\n```\nWrite the reason on a single line, and write the mood as a single word. Do not use any markdown."
+
 TEMPERATURE = 0.75
 FREQ_PENALTY = 1
 REMEMBER_TEMPERATURE = 0
@@ -40,6 +96,27 @@ def getMessageStr(bot, message, writeBotName=False):
     return result
 
 
+def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[dict[str, str]]:
+    result = []
+    if role is None:
+        logging.warning("Assuming 'user' role for GPT message creation.")
+        role = Role.USER
+    role = role.value
+    if isinstance(_input, str):
+        if len(_input) != 0:
+            result = [{"role": role, "content": _input}]
+    elif isinstance(_input, list):
+        if isinstance(_input[0], str):
+            for s in _input:
+                result.append({"role": role, "content": s})
+        elif isinstance(_input[0], dict):
+            result = _input
+    elif isinstance(_input, dict):
+        result = [_input]
+
+    return result
+
+
 def getContextGPTPlainMessages(bot, messages: list[discord.Message]):
     result_str = ""
 
@@ -54,10 +131,10 @@ def getContextGPTChatlog(bot, messages: list[discord.Message]):
     log_str = ""
 
     def appendLogStr(_log_str=log_str):
-        result.append({"role": "user", "content": _log_str})
+        result.extend(createGPTMessage(_log_str, Role.USER))
 
     def appendBotStr(_m):
-        result.append({"role": "assistant", "content": _m.clean_content})
+        result.extend(createGPTMessage(_m.clean_content, Role.ASSISTANT))
 
     for m in messages:
         if m.author.id == bot.user.id:
@@ -89,48 +166,74 @@ def getMemoryString(memory: list[str]) -> str:
     return memory_str
 
 
-def getGPTResponse(bot, message, message_context_list, memory: list[str] = []):
-    memory_str = getMemoryString(memory)
-    preprompt = [
-        {"role": "user", "content": "List quotes from the Engineer from TF2 as a dialect example."},
-        {"role": "assistant", "content": """ "If it moves, grease it. If it don't move, paint it."
-"I solve practical problems. Not problems like what is beauty, 'cus that would fall within the purview of yer conundrums of philosophy."
-"Pony up, boys!"
-"Never send a boy to do a man's job." """},
-        {"role": "user", "content": f"""Alright partner, from now on, yer gonna respond as a digital friend named Boris. Boris acts and speaks like the Engi from TF2, but he was made by a fella named Steven.
-    {memory_str}
-I'm gonna give ya a chat log and you're gonna respond with a single message as Boris. You will write no explanation or anything else, ya hear? Always speak in a southern dialect like the Engi, with colloquialisms. Here is an example:
-```Chatlog
-Steven: yeah that is ridiculous
-Kristian: What is :pensive:?
-```
-```Response
-What's so doggon crazy 'bout it, boys?
-```
-Never type out "Boris:" at the start of your messages. Never send an empty message. If you understand, respond with a single '.' this time, but never again.
-"""},
-        {"role": "assistant", "content": "."}
-    ]
-    message_context_list.append(message)
-    logging.info(f"Getting GPT response for '{message.clean_content}'")
+def buildGPTMessageLog(*args):
+    result = []
+    for a in args:
+        result.extend(createGPTMessage(a))
+    return result
+
+
+def getMoodString(mood: (str, str)):
+    if len(mood) != 0:
+        result = f"Boris' current mood is {mood[0]}"
+        if len(mood[1]) > 0:
+            result += f" because: {mood[1]}"
+    else:
+        return ""
+
+
+def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message], memory: list[str],
+                   mood: (str, str) = None):
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
+    if not mood:
+        mood = []
+    preprompt = buildGPTMessageLog(DIALECT_EXAMPLES,
+                                   CHARACTER_PROMPT,
+                                   getMemoryString(memory),
+                                   getMoodString(mood),
+                                   RESPONSE_EXAMPLE,
+                                   COMMAND_INSTRUCTIONS,
+                                   FORMAT_COMMANDS,
+                                   CONFIRM_UNDERSTANDING)
     gpt_messages = preprompt
+    message_context_list.append(message)
     gpt_messages.extend(getContextGPTChatlog(bot, message_context_list))
 
-    logging.info(gpt_messages)
+    logging.info(f"Getting GPT response for '{message.clean_content}'")
+    logging.info(str(gpt_messages))
     response_str: str = promptGPT(gpt_messages, TEMPERATURE, FREQ_PENALTY)["string"]
 
-    if response_str.startswith("Boris:"):
-        response_str = response_str[len("Boris: "):]
-    elif response_str == "":
-        response_str = "..."
+    response_split = response_str.split('\n')
+    response_str = ""
+    new_mood = None
+    new_memory = None
+    for l in response_split:
+        if l.startswith("Remember: "):
+            new_memory = l[len("Remember: "):]
+            logging.info(f"Remembering: {new_memory}")
+        elif l.startswith("Mood: "):
+            new_mood = l[len("Mood: "):]
+            logging.info(f"Mood set to: {new_mood}")
+        elif len(l) > 0:
+            response_str = l
+    if response_str == "":
+        message.add_reaction('🤔')
 
     # todo
     # if response["reason"] == "max_tokens":
     #     print("ERROR: Tokens maxed out on prompt. Memories are getting too long.")
 
-    return response_str
+    return response_str, new_memory, new_mood
+
+
+def getMood(bot, message_context_list, memory) -> (str, str):
+    chatlog = getContextGPTPlainMessages(bot, message_context_list)
+    prompt = buildGPTMessageLog(getMemoryString(memory), MOOD_PREPROMPT, MOOD_FORMAT_COMMANDS, CONFIRM_UNDERSTANDING)
+    result = promptGPT(prompt)["string"].split('\n')
+    if len(result) > 2:
+        return None
+    return result
 
 
 def getMemoryWordCount(memory):
@@ -143,16 +246,12 @@ def getMemoryWordCount(memory):
 
 def shrinkMemories(memory, explain=False):
     memory_str = '\n'.join(memory)
-    preprompt = [
-        {"role": "user",
-         "content": "I am going to give you a list of statements. Lower the word count while retaining all details. Explain nothing and respond only with the shorter list of statements separated by newlines. Keep each memory separate. Always keep names.\nIf you understand, respond with '.'."},
-        {"role": "assistant", "content": '.'},
-        {"role": "user", "content": memory_str}
-    ]
+    memory_message = createGPTMessage(memory_str, Role.USER)
+    prompt = buildGPTMessageLog(MEMORY_PREPROMPT, CONFIRM_UNDERSTANDING, memory_message)
 
     before_word_count = getMemoryWordCount(memory)
     if before_word_count > MEMORY_WORD_COUNT_MAX / 2:
-        memory = promptGPT(preprompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"].split('\n')
+        memory = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"].split('\n')
         logging.info("Minimized memories.")
         if getMemoryWordCount(memory) > MEMORY_WORD_COUNT_MAX:
             cullMemories(memory, explain=explain)
