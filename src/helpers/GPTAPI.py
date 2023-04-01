@@ -118,6 +118,7 @@ Your goal is to be a good southern conversationalist. Never type out "Boris:" at
     gpt_messages = preprompt
     gpt_messages.extend(getContextGPTChatlog(bot, message_context_list))
 
+    logging.info(gpt_messages)
     response_str: str = promptGPT(gpt_messages, TEMPERATURE, FREQ_PENALTY)["string"]
 
     if response_str.startswith("Boris:"):
