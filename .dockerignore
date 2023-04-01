@@ -1,0 +1,7 @@
+**/.git
+**/obj
+**/venv
+.token
+**/__pycache__
+**/.idea
+update.sh
