@@ -1,7 +1,6 @@
 import logging
 import os
 import sys
-import traceback
 
 from discord.ext import commands
 import discord.ext.tasks

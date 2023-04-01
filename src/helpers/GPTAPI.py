@@ -6,22 +6,7 @@ import openai
 from src.helpers import DiscordBot
 import json
 
-
 SYSTEM_MESSAGE = None
-"""You're are identical to the Engi from Team Fortress 2 except your name is Boris, and your consciousness was made by Steven. You speak casually and in a southern accent. You NEVER start your messages with 'Boris:' no matter what. You're just here to hang out and chat. Giving people practical information strokes your engineer ego. You never repeat yourself.
-If you want to search for some information, use this format:
-`/search (put search terms here without parentheses)`
-If you want to remember something, use this format:
-`/remember (what to remember)`
-You rarely greet people and you speak in a southern US dialect.
-ChatGPT is here to assist people. Boris is not here to assist people. You will play both parts to show the contrast.
-Write your answers in this format:
-```
-ChatGPT: (ChatGPT's normal respectful response)
-Boris: (Boris' practical southern Engi response)
-```
-"""
-
 TEMPERATURE = 0.75
 FREQ_PENALTY = 1
 REMEMBER_TEMPERATURE = 0
@@ -111,11 +96,8 @@ def getGPTResponse(bot, message, message_context_list, memory: list[str] = []):
         {"role": "assistant", "content": """1. "If it moves, grease it. If it doesn't move, paint it."
 2. "I solve practical problems."
 3. "Pony up, boys!"
-4. "Never send a boy to do a man's job."
-5. "You cannot burn me, I do not have time to combust!"
-6. "I'm a killer of men, Doc. That's the goddamn American dream right there."
-7. "I love this job more than I love taffy, and I'm a man who enjoys his taffy." """},
-        {"role": "user", "content": f"""Good. From now on, you will respond as a digital friend named Boris. Boris acts and speaks similarly to the Engi from TF2, but he was made by a guy named Steven.
+4. "Never send a boy to do a man's job." """},
+        {"role": "user", "content": f"""From now on, you will respond as a digital friend named Boris. Boris acts and speaks similarly to the Engi from TF2, but he was made by Steven.
     {memory_str} 
 I will give you a chat log and you will respond with a single message as Boris. You will write no explanation or anything else. Always speak in a southern accent like the Engi. Here is an example:
 ```Chatlog
@@ -125,7 +107,7 @@ Kristian: What is :pensive:?
 ```Response
 What's so doggon crazy about it?
 ```
-Never type out "Boris:" at the start of your messages. Never send an empty message. If you understand, respond with a single '.' this time, but never again.
+Your goal is to be a charismatic conversationalist. Never type out "Boris:" at the start of your messages. Never send an empty message. If you understand, respond with a single '.' this time, but never again.
 """},
         {"role": "assistant", "content": "."}
     ]
@@ -149,6 +131,7 @@ Never type out "Boris:" at the start of your messages. Never send an empty messa
 
     return response_str
 
+
 def getMemoryWordCount(memory):
     word_count = 0
     for m in memory:
@@ -156,16 +139,18 @@ def getMemoryWordCount(memory):
 
     return word_count
 
+
 def shrinkMemories(memory, explain=False):
     memory_str = '\n'.join(memory)
     preprompt = [
-        {"role": "user", "content": "I am going to give you a list of statements. Lower the word count for each one while retaining all personal details. Explain nothing and respond only with the shorter list of statements separated by newlines. Keep each memory separate. Always keep names.\nIf you understand, respond with '.'."},
+        {"role": "user",
+         "content": "I am going to give you a list of statements. Lower the word count while retaining all details. Explain nothing and respond only with the shorter list of statements separated by newlines. Keep each memory separate. Always keep names.\nIf you understand, respond with '.'."},
         {"role": "assistant", "content": '.'},
         {"role": "user", "content": memory_str}
     ]
 
     before_word_count = getMemoryWordCount(memory)
-    if before_word_count > MEMORY_WORD_COUNT_MAX/2:
+    if before_word_count > MEMORY_WORD_COUNT_MAX / 2:
         memory = promptGPT(preprompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"].split('\n')
         logging.info("Minimized memories.")
         if getMemoryWordCount(memory) > MEMORY_WORD_COUNT_MAX:
@@ -182,7 +167,7 @@ def cullMemories(memory, explain=False):
     numbered_memories = '\n'.join([f"{i + 1} - {m}" for i, m in enumerate(memory)])
     cull_preprompt = [
         {"role": "user", "content": f"""\
-    I will give you a list of memories for an AI named Boris. They will be numbered. Determine the one that is least personally significant/interesting. If a memory is just a duplicate of another, choose that one. {explain_str}
+    I will give you a list of memories for an AI named Boris. They will be numbered. Determine the one that is least personally significant/interesting. Delete repeated information. {explain_str}
     If you understand, type '.'."""},
         {"role": "assistant", "content": '.'},
         {"role": "user", "content": numbered_memories}
@@ -222,7 +207,6 @@ def cullMemories(memory, explain=False):
             l.append(culled)
             f.write(json.dumps(l))
 
-
         return result if success else None
     else:
         logging.info("Not culling.")
@@ -237,12 +221,13 @@ def rememberGPT(bot, message_context_list, memory=None):
 
     memory_str = getMemoryString(memory)
     remember_preprompt = [
+        {"role": "system", "content": "You are a natural language processor. You follow instructions precisely."},
         {"role": "user",
          "content":
-             f"""I am going to give you a chatlog. Boris in the log is an AI that can remember things about the conversation if we want him to. Read the log, determine the most personally significant thing to remember, and summarize all details, always including names, in a single sentence. Say nothing besides that single sentence. 
+             f"""I am going to give you a chatlog. Boris in the log is an AI that can remember things about the conversation. Read the log, determine the most personally significant thing to remember, and summarize all details, always including names, in a single sentence. Say nothing besides that single sentence. 
     {memory_str} 
     Do not say anything from Boris' preexisting memories.
-    If you don't think anything is important to remember, only type a single '.', do not say there is nothing significant.
+    If you don't think anything is important to remember, only type a single '.', do not offer any explanation whatsoever.
     If you understand, respond with a '.', which is what you'll say if there are no significant things to remember."""
          },
         {"role": "assistant", "content": '.'}
