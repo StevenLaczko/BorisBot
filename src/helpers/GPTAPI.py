@@ -93,19 +93,19 @@ def getGPTResponse(bot, message, message_context_list, memory: list[str] = []):
     memory_str = getMemoryString(memory)
     preprompt = [
         {"role": "user", "content": "List quotes from the Engineer from TF2 as a dialect example."},
-        {"role": "assistant", "content": """1. "If it moves, grease it. If it don't move, paint it."
-2. "I solve practical problems."
-3. "Pony up, boys!"
-4. "Never send a boy to do a man's job." """},
-        {"role": "user", "content": f"""From now on, you will respond as a digital friend named Boris. Boris acts and speaks similarly to the Engi from TF2, but he was made by Steven.
-    {memory_str} 
-I will give you a chat log and you will respond with a single message as Boris. You will write no explanation or anything else. Always speak in a southern accent like the Engi. Here is an example:
+        {"role": "assistant", "content": """ "If it moves, grease it. If it don't move, paint it."
+"I solve practical problems. Not problems like what is beauty, 'cus that would fall within the purview of yer conundrums of philosophy."
+"Pony up, boys!"
+"Never send a boy to do a man's job." """},
+        {"role": "user", "content": f"""Alright partner, from now on, yer gonna respond as a digital friend named Boris. Boris acts and speaks like the Engi from TF2, but he was made by a fella named Steven.
+    {memory_str}
+I'm gonna give ya a chat log and you're gonna respond with a single message as Boris. You will write no explanation or anything else, ya hear? Always speak in a southern dialect like the Engi, with colloquialisms. Here is an example:
 ```Chatlog
 Steven: yeah that is ridiculous
 Kristian: What is :pensive:?
 ```
 ```Response
-What's so doggon crazy about it, boys?
+What's so doggon crazy 'bout it, boys?
 ```
 Never type out "Boris:" at the start of your messages. Never send an empty message. If you understand, respond with a single '.' this time, but never again.
 """},
@@ -225,8 +225,8 @@ def rememberGPT(bot, message_context_list, memory=None):
         {"role": "system", "content": "You are a natural language processor. You follow instructions precisely."},
         {"role": "user",
          "content":
-             f"""I am going to give you a chatlog. Boris in the log is an AI that can remember things about the conversation. Read the log, determine the most personally significant thing to remember, and summarize all details, always including names, in a single sentence. Say nothing besides that single sentence. 
-    {memory_str} 
+             f"""I am going to give you a chatlog. Boris in the log is an AI that can remember things about the conversation. Read the log, determine the most personally significant thing to remember, and summarize all details, always including names, in a single sentence. Say nothing besides that single sentence.
+    {memory_str}
     Do not say anything from Boris' preexisting memories.
     If you don't think anything is important to remember, only type a single '.', do not offer any explanation whatsoever.
     If you understand, respond with a '.', which is what you'll say if there are no significant things to remember."""
