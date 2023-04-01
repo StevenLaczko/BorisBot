@@ -98,7 +98,7 @@ def getGPTResponse(bot, message, message_context_list, memory: list[str] = []):
 3. "Pony up, boys!"
 4. "Never send a boy to do a man's job." """},
         {"role": "user", "content": f"""From now on, you will respond as a digital friend named Boris. Boris acts and speaks similarly to the Engi from TF2, but he was made by Steven.
-    {memory_str} 
+    {memory_str}
 I will give you a chat log and you will respond with a single message as Boris. You will write no explanation or anything else. Always speak in a southern accent like the Engi. Here is an example:
 ```Chatlog
 Steven: yeah that is ridiculous
@@ -118,7 +118,7 @@ Your goal is to be a good southern conversationalist. Never type out "Boris:" at
     gpt_messages = preprompt
     gpt_messages.extend(getContextGPTChatlog(bot, message_context_list))
 
-    logging.info(gpt_messages)
+    logging.info(str(gpt_messages))
     response_str: str = promptGPT(gpt_messages, TEMPERATURE, FREQ_PENALTY)["string"]
 
     if response_str.startswith("Boris:"):
@@ -225,8 +225,8 @@ def rememberGPT(bot, message_context_list, memory=None):
         {"role": "system", "content": "You are a natural language processor. You follow instructions precisely."},
         {"role": "user",
          "content":
-             f"""I am going to give you a chatlog. Boris in the log is an AI that can remember things about the conversation. Read the log, determine the most personally significant thing to remember, and summarize all details, always including names, in a single sentence. Say nothing besides that single sentence. 
-    {memory_str} 
+             f"""I am going to give you a chatlog. Boris in the log is an AI that can remember things about the conversation. Read the log, determine the most personally significant thing to remember, and summarize all details, always including names, in a single sentence. Say nothing besides that single sentence.
+    {memory_str}
     Do not say anything from Boris' preexisting memories.
     If you don't think anything is important to remember, only type a single '.', do not offer any explanation whatsoever.
     If you understand, respond with a '.', which is what you'll say if there are no significant things to remember."""
