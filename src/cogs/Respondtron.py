@@ -17,8 +17,6 @@ from enum import Enum, auto
 import random
 import pickle
 
-logging.basicConfig(level=logging.INFO)
-
 class ARGS(Enum):
     WEIGHTS = "weights"
     PROB_MIN = "probMin"
