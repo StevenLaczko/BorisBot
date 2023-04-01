@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import traceback
@@ -10,6 +11,8 @@ DATA_PATH = "data"
 EXTENSIONS = [
     "src.helpers.DiscordBotCommands"
 ]
+
+logging.basicConfig(filename="err.log", level=logging.INFO)
 
 
 class DiscordBot(commands.Bot):
@@ -40,15 +43,9 @@ class DiscordBot(commands.Bot):
             await self.add_cog(c)
 
     async def on_error(self, event, *args, **kwargs):
-        print(sys.exc_info()[0])
-        print(sys.exc_info()[1])
-        traceback.print_tb(sys.exc_info()[2])
-        with open('err.log', 'a') as f:
-            if event == 'on_message':
-                f.write("Unhandled message: " + str(args[0]) + "\n")
-                # await send_message(696863794743345152, args[0])
-            else:
-                raise
+        logging.error(sys.exc_info()[0])
+        logging.error(sys.exc_info()[1])
+        logging.error(sys.exc_info()[2])
 
     async def send_message(self, channelID, message):
         channel = self.get_channel(channelID)
