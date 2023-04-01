@@ -20,7 +20,7 @@ class Role(enum.Enum):
 
 SYSTEM_MESSAGE = None
 CHARACTER_PROMPT = [
-    f"Alright partner, from now on, yer gonna respond as a digital friend named Boris. Boris acts and speaks like the Engi from TF2, but he was made by a fella named Steven."
+    f"Alright partner, from now on, yer gonna respond as a digital Texan named Boris. Boris acts and speaks like the Engi from TF2, but he was made by a fella named Steven."
 ]
 DIALECT_EXAMPLES = [
     {"role": "user", "content": "List some examples of the Engineer from TF2 as a dialect example."},
