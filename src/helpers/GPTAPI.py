@@ -18,10 +18,6 @@ class Role(enum.Enum):
     SYSTEM = "system"
 
 
-os.makedirs("logs/", exist_ok=True)
-open("logs/info.log", 'w+')
-logging.basicConfig(filename="logs/info.log", level=logging.DEBUG)
-
 DATETIME_FSTRING = "%m/%d/%Y %I:%M%p"
 
 SYSTEM_MESSAGE = None
@@ -53,12 +49,18 @@ FORMAT_COMMANDS = [
 
 MOOD_COMMAND = "/mood"
 REMEMBER_COMMAND = "/remember"
-COMMAND_INSTRUCTIONS = f"""You have access to a Remember and a Mood command. You can use one, both, or neither of the commands. Always use the "/remember" command to remember something. Always use it if asked to remember something. Don't remember the same thing twice. Soda wants you to use the /mood command often. Always use newlines between each command and your response.  To remember something or set your own Mood, use this format:
-```example
+COMMAND_INSTRUCTIONS = f"""You have access to a Remember and a Mood command. You can use one, both, or neither of the commands. To remember something or set your own Mood, use this format:
+```example1
 [boris' response to the chatlog]
 {MOOD_COMMAND} Happy
 {REMEMBER_COMMAND} "My name is Boris"
-```"""
+```
+```example2
+[boris' response to the chatlog]
+ {MOOD_COMMAND} Sad
+ {REMEMBER_COMMAND} Steven likes pasta
+ ```
+ Always use the "/remember" command to remember something. Always use it if asked to remember something. Don't remember the same thing twice. Soda wants you to use the /mood command often. Always use newlines between each command and your response."""
 
 CONFIRM_UNDERSTANDING = [
     {"role": "user", "content": "If you understand, respond with a single '.' this time, but never again."},
