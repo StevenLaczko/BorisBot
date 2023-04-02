@@ -9,12 +9,18 @@ import openai
 import pytz, datetime
 from src.helpers import DiscordBot
 import json
+import os
+
 
 class Role(enum.Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
 
+
+os.makedirs("logs/", exist_ok=True)
+open("logs/info.log", 'w+')
+logging.basicConfig(filename="logs/info.log", level=logging.DEBUG)
 
 DATETIME_FSTRING = "%m/%d/%Y %I:%M%p"
 
@@ -201,15 +207,15 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
         mood = []
     message_context_list.append(message)
     prompt = buildGPTMessageLog(DIALECT_EXAMPLES,
-                                   CHARACTER_PROMPT,
-                                   getMemoryString(memory),
-                                   getCurrentTimeString(),
-                                   getMoodString(mood),
-                                   RESPONSE_EXAMPLE,
-                                   COMMAND_INSTRUCTIONS,
-                                   FORMAT_COMMANDS,
-                                   CONFIRM_UNDERSTANDING,
-                                   getContextGPTChatlog(bot, message_context_list))
+                                CHARACTER_PROMPT,
+                                getMemoryString(memory),
+                                getCurrentTimeString(),
+                                getMoodString(mood),
+                                RESPONSE_EXAMPLE,
+                                COMMAND_INSTRUCTIONS,
+                                FORMAT_COMMANDS,
+                                CONFIRM_UNDERSTANDING,
+                                getContextGPTChatlog(bot, message_context_list))
 
     logging.info(f"Getting GPT response for '{message.clean_content}'")
     response_str: str = promptGPT(prompt, TEMPERATURE, FREQ_PENALTY)["string"]
