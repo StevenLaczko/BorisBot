@@ -10,9 +10,6 @@ import pytz, datetime
 from src.helpers import DiscordBot
 import json
 
-logging.basicConfig(level=logging.INFO)
-
-
 class Role(enum.Enum):
     USER = "user"
     ASSISTANT = "assistant"
