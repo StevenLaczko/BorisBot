@@ -473,7 +473,7 @@ class Respondtron(commands.Cog):
             self.mood = (bot_response.new_mood, "")
         if bot_response.response_str:
             logging.info(f"Response: {bot_response.response_str}")
-            msg = await message.reply(bot_response.response_str)
+            msg = await message.channel.send(bot_response.response_str)
             self.currentConversations[message.channel.id].bot_messageid_response[msg.id] = bot_response.full_response
 
     async def replyToMessage(self, message):
@@ -518,7 +518,7 @@ class Respondtron(commands.Cog):
             responses = highestMatch[0][1:]
             response = random.choice(responses)
             logging.info("Response: " + response)
-            await message.reply(response)
+            await message.channel.send(response)
         else:
             await self.replyGPT(message)
             return

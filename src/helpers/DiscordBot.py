@@ -14,7 +14,7 @@ EXTENSIONS = [
 
 os.makedirs("logs/", exist_ok=True)
 open("logs/info.log", 'w+')
-logging.basicConfig(filename="logs/info.log", level=logging.DEBUG)
+logging.basicConfig(filename="logs/info.log", level=logging.INFO)
 
 
 class DiscordBot(commands.Bot):
