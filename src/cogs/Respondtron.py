@@ -8,6 +8,8 @@ import discord
 import pytz
 
 from src.helpers import DiscordBot
+from src.helpers.BotResponse import BotResponse
+from src.helpers.Conversation import Conversation
 import re
 import sys
 import src.helpers.GPTAPI as GPTAPI
@@ -16,6 +18,7 @@ from discord.ext import commands
 from enum import Enum, auto
 import random
 import pickle
+
 
 class ARGS(Enum):
     WEIGHTS = "weights"
@@ -63,15 +66,16 @@ class Respondtron(commands.Cog):
     tempArgs = None
     state = STATES.NOMINAL
 
-    def __init__(self, bot, responseFile=RESPONSE_FILENAME, botNoResponse="", args=None, memoryFilename=MEMORY_FILENAME):
+    def __init__(self, bot, responseFile=RESPONSE_FILENAME, botNoResponse="", args=None,
+                 memoryFilename=MEMORY_FILENAME):
         self.bot = bot
         self.responseFilePath = DiscordBot.getFilePath(responseFile)
         self.memoryFilePath = DiscordBot.getFilePath(memoryFilename)
         self.botNoResponse = botNoResponse
         self.loadSettings(args)
-        self.currentConvoChannels: dict[int, Union[datetime.datetime, None]] = {}
+        self.currentConversations: dict[int, Conversation] = {}
         self.memory: list[str] = []
-        self.mood: (str, str) = [] # mood, reason
+        self.mood: (str, str) = []  # mood, reason
 
         # load memories
         if os.path.isfile(self.memoryFilePath):
@@ -114,6 +118,7 @@ class Respondtron(commands.Cog):
     def saveSettings(self, settings, file):
         save_obj(settings, file)
         logging.info(f"Saved Settings: {settings}")
+
     # EVENTS
 
     # on_message listens for incoming messages starting with an @(botname) and then responds to them
@@ -121,11 +126,11 @@ class Respondtron(commands.Cog):
     async def on_message(self, message: discord.Message):
         # consider conversations over after 3 minutes of boris not responding
         now = datetime.datetime.now()
-        for c in self.currentConvoChannels:
-            if not self.currentConvoChannels[c]:
+        for c in self.currentConversations:
+            if not self.currentConversations[c]:
                 continue
             dt = CONVO_END_DELAY
-            if self.currentConvoChannels[c] + dt < now:
+            if self.currentConversations[c].timestamp + dt < now:
                 channel = message.guild.get_channel(c)
                 await self.stopConversation(channel)
 
@@ -150,24 +155,25 @@ class Respondtron(commands.Cog):
             await self.stopConversation(message.channel)
         elif botID in mention_ids:
             logging.warning(self.bot.user.name + " mention DETECTED")
-            await message.reply(await self.getResponse(message))
+            message.activity = {"party_id": "Hi there :)\nsup"}
+            await self.replyToMessage(message)
         elif "boris" in message.clean_content.lower():
             logging.warning("I heard my name.")
-            if (message.channel.id in self.currentConvoChannels and self.currentConvoChannels[message.channel.id]) or 0.2 > random.random():
-                await message.reply(await self.getResponse(message))
-        elif message.channel.id in self.currentConvoChannels and self.currentConvoChannels[message.channel.id]:
+            if (message.channel.id in self.currentConversations and self.currentConversations[
+                message.channel.id]) or 0.2 > random.random():
+                await self.replyToMessage(message)
+        elif message.channel.id in self.currentConversations and self.currentConversations[message.channel.id]:
             logging.warning("Message received in convo channel")
-            self.currentConvoChannels[message.channel.id] = datetime.datetime.now()
+            self.currentConversations[message.channel.id].timestamp = datetime.datetime.now()
             if 0.3 > random.random():
-                response = await self.getResponse(message)
-                await message.reply(response)
-        #TODO 5% chance asks GPT if it's relevant to Boris or his memories
+                await self.replyToMessage(message)
+        # TODO 5% chance asks GPT if it's relevant to Boris or his memories
         elif 0.05 > random.random():
-            await message.reply(await self.getResponse(message))
+            await self.replyToMessage(message)
 
     async def stopConversation(self, channel):
         logging.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
-        self.currentConvoChannels[channel.id] = None
+        self.currentConversations[channel.id] = None
         if MEMORY_CHANCE > random.random():
             context = await self.getConvoContext(channel, after=None, ignore_list=IGNORE_LIST)
             await self.storeMemory(context)
@@ -252,7 +258,7 @@ class Respondtron(commands.Cog):
     @commands.command(name="remember", help="Remember.")
     @commands.is_owner()
     async def remember(self, ctx):
-        await self.storeMemory(await self.getConvoContext(ctx.channel, after=None,  ignore_list=IGNORE_LIST))
+        await self.storeMemory(await self.getConvoContext(ctx.channel, after=None, ignore_list=IGNORE_LIST))
 
     # METHODS
 
@@ -366,7 +372,8 @@ class Respondtron(commands.Cog):
         # then search the server for the term, and give it to Boris (in a memory) for extra response context.
         pass
 
-    async def getContext(self, channel, before, after=False, num_messages_requested=None, max_word_count=MAX_CONTEXT_WORDS, ignore_list=None):
+    async def getContext(self, channel, before, after=False, num_messages_requested=None,
+                         max_word_count=MAX_CONTEXT_WORDS, ignore_list=None):
         logging.info("Getting context")
         all_messages = []
         now = datetime.datetime.now(tz=pytz.UTC)
@@ -380,7 +387,8 @@ class Respondtron(commands.Cog):
         do_repeat = True
         while do_repeat:
             messages: list[discord.Message] = []
-            async for m in channel.history(limit=num_messages_requested, after=after, before=before, oldest_first=False):
+            async for m in channel.history(limit=num_messages_requested, after=after, before=before,
+                                           oldest_first=False):
                 if ignore_list and m.author.id in ignore_list:
                     continue
                 messages.append(m)
@@ -397,10 +405,12 @@ class Respondtron(commands.Cog):
         all_messages.reverse()
         return all_messages
 
-    async def getConvoContext(self, channel, before=False, after: Union[discord.Message, datetime.datetime, None, bool] = False, max_word_count=MAX_CONVO_WORDS, ignore_list=None):
+    async def getConvoContext(self, channel, before=False,
+                              after: Union[discord.Message, datetime.datetime, None, bool] = False,
+                              max_word_count=MAX_CONVO_WORDS, ignore_list=None):
         context = []
         try:
-            message: discord.Message = [m async for m in channel.history(limit=2)][1] # second to last message to start
+            message: discord.Message = [m async for m in channel.history(limit=2)][1]  # second to last message to start
         except IndexError as e:
             logging.error("Not enough messages in channel to get context.")
             logging.error(e)
@@ -414,18 +424,25 @@ class Respondtron(commands.Cog):
             logging.error(e)
         return context
 
-    def saveMemory(self, _memory, shrink=True, _explain=True):
-        self.memory.append(_memory)
+    async def saveMemory(self, _memory, shrink=True, _explain=True):
+        for m in self.memory:
+            isMatch, probability = await self.botMatchString(m, _memory)
+            if isMatch:
+                close = m
+                logging.info(f"Not saving memory. Too close to {close}, probability {probability}")
+                return
+
+        self.memory.append(_memory.lower())
         if shrink:
             self.memory = GPTAPI.shrinkMemories(self.memory, explain=_explain)
         with open(self.memoryFilePath, 'w+') as memoryFile:
             memoryFile.write(json.dumps(self.memory))
 
     async def storeMemory(self, conversation_log):
-        _memory = GPTAPI.rememberGPT(self, conversation_log, self.memory)
+        _memory = GPTAPI.rememberGPT(self.bot, conversation_log, self.memory)
         if _memory != "" and _memory is not None:
             logging.info(f"Storing memory `{_memory}")
-            self.saveMemory(_memory)
+            await self.saveMemory(_memory)
         else:
             logging.info(f"Storing no memories from conversation of length {len(conversation_log)}")
 
@@ -433,14 +450,10 @@ class Respondtron(commands.Cog):
         self.mood = GPTAPI.getMood(self, conversation_log, self.memory)
         logging.info(f"Setting mood from convo to {self.mood}")
 
-    def parseGPTResponse(self, _response_str, new_memory, new_mood):
-        if new_memory:
-            self.saveMemory(new_memory)
-        if new_mood:
-            self.mood = (new_mood, "")
-        return _response_str
+    async def parseGPTResponse(self, bot_response: BotResponse):
+        return bot_response.response_str if bot_response.response_str else ""
 
-    async def getGPTResponse(self, message, max_word_count=None, _memory=None, _mood=None):
+    async def replyGPT(self, message, max_word_count=None, _memory=None, _mood=None):
         if not max_word_count:
             max_word_count = MAX_CONTEXT_WORDS
         if not _memory:
@@ -448,11 +461,22 @@ class Respondtron(commands.Cog):
         if not _mood:
             _mood = self.mood
         context = await self.getContext(message.channel, message, max_word_count=max_word_count)
-        return self.parseGPTResponse(*await GPTAPI.getGPTResponse(self.bot, message, context, _memory, mood=_mood))
+        bot_response: BotResponse = await GPTAPI.getGPTResponse(self.bot, message, context, True,
+                                                                self.currentConversations[message.channel.id],
+                                                                memory=_memory, mood=_mood)
+        if bot_response.new_memory:
+            await self.saveMemory(bot_response.new_memory)
+        if bot_response.new_mood:
+            self.mood = (bot_response.new_mood, "")
+        if bot_response.response_str:
+            logging.info(f"Response: {bot_response.response_str}")
+            msg = await message.reply(bot_response.response_str)
+            self.currentConversations[message.channel.id].bot_messageid_response[msg.id] = bot_response.full_response
 
-    async def getResponse(self, message):
+    async def replyToMessage(self, message):
         logging.info("Responding")
-        self.currentConvoChannels[message.channel.id] = datetime.datetime.now()
+        if message.channel.id not in self.currentConversations or not self.currentConversations[message.channel.id]:
+            self.currentConversations[message.channel.id] = Conversation(datetime.datetime.now())
         # get trigger
         message_string = message.clean_content.strip()
         triggerList = message_string.split()[1:]
@@ -490,11 +514,11 @@ class Respondtron(commands.Cog):
             # get random response from list
             responses = highestMatch[0][1:]
             response = random.choice(responses)
+            logging.info("Response: " + response)
+            await message.reply(response)
         else:
-            response = await self.getGPTResponse(message)
-
-        logging.info("Response: " + response)
-        return response
+            await self.replyGPT(message)
+            return
 
     async def botMatchString(self, str1, str2):
         args = StringMatchHelp.fuzzyMatchString(str1, str2, self.settings[ARGS.WEIGHTS], self.settings[ARGS.PROB_MIN])

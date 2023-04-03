@@ -7,7 +7,10 @@ import logging
 import os
 import openai
 import pytz, datetime
+
 from src.helpers import DiscordBot
+from src.helpers.BotResponse import BotResponse
+from src.helpers.Conversation import Conversation
 import json
 import os
 
@@ -22,7 +25,7 @@ DATETIME_FSTRING = "%m/%d/%Y %I:%M%p"
 
 SYSTEM_MESSAGE = None
 CHARACTER_PROMPT = [
-    f"Alright partner, from now on, yer gonna respond as a digital Texan named Boris. Boris acts and speaks like the Engi from TF2, but he was made by a fella named Steven."
+    f"Alright partner, you will be actin' as a chatbot named Boris. Boris acts and speaks like the Engi from TF2, but he was made by a fella named Steven."
 ]
 DIALECT_EXAMPLES = [
     {"role": "user", "content": "List some examples of the Engineer from TF2 as a dialect example."},
@@ -33,37 +36,76 @@ DIALECT_EXAMPLES = [
 "I tell you what, this gizmo here is more complicated than a cat tryin' to bury a turd on a marble floor." """
      }
 ]
+
+MOOD_COMMAND = "!MOOD"
+REMEMBER_COMMAND = "!REMEMBER"
+RESPOND_COMMAND = "!RESPOND"
+COMMAND3_RESPONSE_EXAMPLE = f"""```Example Chatlog
+You: And I said doggonit!
+Steven (AKA Soda) (04/01/2023 09:41PM): What even if that word?
+Kristian (04/01/2023 09:42PM): Yeah really
+```
+```Example Response
+!RESPOND What's so doggon crazy about it, boys?
+!REMEMBER Steven and Kristian don't know southern slang.
+!MOOD Dejected
+```
+```Example Chatlog
+Steven (AKA Soda) (03/27/2023 03:05PM): Eh, I prefer the normal brickhouses. I like that woody taste. Maduros are too spicy imo @Boris
+```
+```Example Response
+!RESPOND Well now, to each their own, I reckon. Can't go wrong with the classic Brickhouse then.
+!REMEMBER Steven likes Brickhouse cigars for their woody taste.
+!MOOD Agreeable
+```"""
+
 RESPONSE_EXAMPLE = [
-    """```Chatlog
-    Steven: yeah that is ridiculous
-    Kristian: What is :pensive:?
+    """```Example Chatlog
+    You: And I said doggonit!
+    Steven (AKA Soda) (04/01/2023 09:41PM): What even if that word?
+    Kristian (04/01/2023 09:42PM): Yeah really
     ```
-    ```Response
+    ```Example Response
     What's so doggon crazy about it, boys?
+    !REMEMBER "Steven and Kristian don't know southern slang."
+    !MOOD Dejected
     ``` """
 ]
-FORMAT_COMMANDS = [
-    "I'm gonna give ya a chat log and you're gonna respond with a single message as Boris. You will write no explanation or anything else, ya hear? Always speak in a southern dialect like the Engi, with colloquialisms.",
-    "Never type out \"Boris:\" at the start of your messages."
+THREE_COMMAND_FINAL_INSTRUCTIONS = [
+    "I will give you a chatlog and following messages. Control Boris' response, memory, and mood. And o' course, speak in a southern dialect like the Engi, with colloquialisms. Write no explanation, and write nothing besides your 3 commands on separate lines.",
+    "NEVER type out \"Boris:\" or \"You:\", that is only for the chatlog."
 ]
 
-MOOD_COMMAND = "/mood"
-REMEMBER_COMMAND = "/remember"
-COMMAND_INSTRUCTIONS = f"""You have access to a Remember and a Mood command. You can use one, both, or neither of the commands. To remember something or set your own Mood, use this format:
+#{REMEMBER_COMMAND} 'puters can talk in this modern age.
+THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands. You can use any number of the commands per response, but only once each. To remember something or change your own Mood, use this format:
 ```example1
-[boris' response to the chatlog]
-{MOOD_COMMAND} Happy
+{RESPOND_COMMAND} Ah that's real interestin'! I'd never have thunk.
+{MOOD_COMMAND} Interested
+```
+```example2
+{RESPOND_COMMAND} Oh you like pasta huh? I can always go for a bowl a pasta, myself.
+{REMEMBER_COMMAND} Steven likes pasta
+ ```
+```example3
+{RESPOND_COMMAND} I'd recommend havin' a Medic, a Heavy, a Demoman, and a Soldier. And if ya got a good team, have someone keep an eye on the flanks.
+{REMEMBER_COMMAND} Alec asked about the best team composition on Upward.
+{MOOD_COMMAND} Helpful
+ ```
+If there is something to remember, use {REMEMBER_COMMAND}. If you want to change your mood, use {MOOD_COMMAND}."""
+
+COMMAND_INSTRUCTIONS = f"""You have access to a Remember and a Mood command. You can use one, both, or neither of the commands. To remember something or change your own Mood, use this format:
+```example1
+Ah my name is Boris, huh partner? Well I'll remember that.
 {REMEMBER_COMMAND} "My name is Boris"
 ```
 ```example2
-[boris' response to the chatlog]
- {MOOD_COMMAND} Sad
- {REMEMBER_COMMAND} Steven likes pasta
+I can always go for a bowl a pasta, myself.
+{MOOD_COMMAND} Hungry
  ```
- Always use the "/remember" command to remember something. Always use it if asked to remember something. Don't remember the same thing twice. Soda wants you to use the /mood command often. Always use newlines between each command and your response."""
+ Use the /remember command often. Always use it if asked to remember something. Only use the /mood command to change your mood to something else. Use the /mood command often. Chatlogs do not keep track of your use of the commands, so use them even if they're not there. Always use newlines between each command and your response."""
 
 CONFIRM_UNDERSTANDING = [
-    {"role": "user", "content": "If you understand, respond with a single '.' this time, but never again."},
+    {"role": "user", "content": "If you understand, type '.'"},
     {"role": "assistant", "content": "."}
 ]
 
@@ -73,8 +115,8 @@ MOOD_PREPROMPT = "I am going to give you a list of statements. You are the AI fr
 
 MOOD_FORMAT_COMMANDS = "Write your response in this format:\n```format\nReason: [explain reason for mood]\n[mood]\n```\nWrite the reason on a single line, and write the mood as a single word. Do not use any markdown."
 
-TEMPERATURE = 0.75
-FREQ_PENALTY = 1
+TEMPERATURE = 2
+FREQ_PENALTY = 2
 REMEMBER_TEMPERATURE = 0
 REMEMBER_FREQ_PENALTY = 0
 MEMORY_WORD_COUNT_MAX = 300
@@ -101,6 +143,9 @@ def getMessageStr(bot, message, writeBotName=False):
     if writeBotName or bot.user.id != message.author.id:
         name = id_name_dict[str(message.author.id)] if str(message.author.id) in id_name_dict else None
         nick_str = message.author.name
+        # if bot.user.id == message.author.id:
+        #     result = f"You: {message.clean_content}"
+        # else:
         name_str = f"{name} (AKA {nick_str})" if name else nick_str
         result = f"{name_str} ({local_timestamp_str}): {message.clean_content}"
     else:
@@ -130,12 +175,33 @@ def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[
     return result
 
 
+def getContextGPTMix(bot, messages: list[discord.Message], conversation: Conversation) -> list:
+    result = []
+    log_str = ""
+
+    response_log = conversation.bot_messageid_response
+    for m in messages:
+        if response_log and m.id in response_log:
+            if len(log_str) != 0:
+                result.append(log_str)
+            log_str = ""
+            result.append(createGPTMessage(response_log[m.id], Role.ASSISTANT))
+        else:
+            log_str += getMessageStr(bot, m, writeBotName=True) + '\n'
+
+    if len(log_str) != 0:
+        result.append(log_str)
+
+    return result
+
+
 def getContextGPTPlainMessages(bot, messages: list[discord.Message]) -> str:
-    result_str = ""
+    result_str = "```Chatlog\n"
 
     for m in messages:
         result_str += getMessageStr(bot, m, writeBotName=True) + '\n'
 
+    result_str += "```"
     return result_str
 
 
@@ -190,7 +256,7 @@ def getMoodString(mood: (str, str)):
     result = ""
     if len(mood) != 0:
         result = f"Boris' current mood is {mood[0]}"
-        if len(mood[1]) > 0:
+        if len(mood) > 1 and mood[1] and len(mood[1]) > 0:
             result += f" because: {mood[1]}"
         result += "\nRespond in that manner."
     logging.info(f"Current mood is {mood}")
@@ -201,32 +267,20 @@ def getCurrentTimeString():
     return f"Current date/time: {datetime.datetime.now().strftime(DATETIME_FSTRING)}"
 
 
-async def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message], memory: list[str],
-                         mood: (str, str) = None):
+async def getCommands(bot, message, response_str, message_context_list: list[discord.Message], memory: list[str]):
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
-    if not mood:
-        mood = []
-    message_context_list.append(message)
-    prompt = buildGPTMessageLog(DIALECT_EXAMPLES,
+    last_response = createGPTMessage(response_str, Role.ASSISTANT)
+    system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
+    prompt = buildGPTMessageLog(system,
                                 CHARACTER_PROMPT,
                                 getMemoryString(memory),
-                                getCurrentTimeString(),
-                                getMoodString(mood),
-                                RESPONSE_EXAMPLE,
-                                COMMAND_INSTRUCTIONS,
-                                FORMAT_COMMANDS,
+                                # STANDALONE_COMMAND_INSTRUCTIONS,
                                 CONFIRM_UNDERSTANDING,
-                                getContextGPTChatlog(bot, message_context_list))
-
-    logging.info(f"Getting GPT response for '{message.clean_content}'")
-    response_str: str = promptGPT(prompt, TEMPERATURE, FREQ_PENALTY)["string"]
-    logging.debug(f"GPT response:\n```\n{response_str}\n```")
-
-    response_split = response_str.split('\n')
-    response_str = ""
-    new_mood = None
-    new_memory = None
+                                getContextGPTPlainMessages(bot, message_context_list))
+    response = promptGPT(prompt)["string"]
+    response_split = response.split('\n')
+    new_mood = new_memory = None
     for l in response_split:
         if l.startswith(REMEMBER_COMMAND):
             new_memory = l[len(REMEMBER_COMMAND):]
@@ -237,13 +291,85 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
             await message.add_reaction('☝')
             logging.info(f"Mood set to: {new_mood}")
         elif len(l) > 0:
-            response_str += l
+            r = l
+            if l.startswith("You:"):
+                r = l[len("You:"):].strip()
+            if l.startswith("Boris:"):
+                r = l[len("Boris:"):].strip()
+            if len(response_str) > 0:
+                response_str += '\n'
+            response_str += r
+
+    return new_mood, new_memory
+
+
+async def parseGPTResponse(full_response_str) -> BotResponse:
+    response_split = full_response_str.split('\n')
+    response_str = ""
+    new_mood = new_memory = None
+    for l in response_split:
+        if l.startswith(REMEMBER_COMMAND):
+            new_memory = l[len(REMEMBER_COMMAND):]
+            ##await message.add_reaction('🤔')
+            logging.info(f"Remembering: {new_memory}")
+        elif l.startswith(MOOD_COMMAND):
+            new_mood = l[len(MOOD_COMMAND):]
+            # await message.add_reaction('☝')
+            # logging.info(f"Mood set to: {new_mood}")
+        elif l.startswith(RESPOND_COMMAND):
+            r = l[len(RESPOND_COMMAND):].strip()
+            if r.startswith("You:"):
+                r = r[len("You:"):].strip()
+            if r.startswith("Boris:"):
+                r = r[len("Boris:"):].strip()
+            if len(response_str) > 0:
+                response_str += '\n'
+            response_str += r
+
+    return BotResponse(full_response_str, response_str, new_mood=new_mood, new_memory=new_memory)
+
+
+async def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message],
+                         use_plaintext: bool,
+                         conversation: Conversation,
+                         memory: list[str] = None,
+                         mood: (str, str) = None) -> BotResponse:
+    openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
+    openai.api_key = os.environ.get("OPENAI_API_KEY")
+
+    message_context_list.append(message)
+    system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
+    if not mood:
+        mood = []
+    chatlog = ""
+    if use_plaintext:
+        chatlog = getContextGPTPlainMessages(bot, message_context_list)
+    else:
+        chatlog = getContextGPTChatlog(bot, message_context_list)
+
+    context = getContextGPTMix(bot, message_context_list, conversation)
+    prompt = buildGPTMessageLog(system,
+                                CHARACTER_PROMPT,
+                                getMemoryString(memory),
+                                getCurrentTimeString(),
+                                getMoodString(mood),
+                                THREE_COMMAND_INSTRUCTIONS,
+                                COMMAND3_RESPONSE_EXAMPLE,
+                                THREE_COMMAND_FINAL_INSTRUCTIONS,
+                                CONFIRM_UNDERSTANDING,
+                                *context
+                                )
+
+    logging.info(f"Getting GPT response for '{message.clean_content}'")
+    response_str: str = promptGPT(prompt, TEMPERATURE, FREQ_PENALTY)["string"]
+    logging.debug(f"GPT response: `{response_str}`")
 
     # todo
     # if response["reason"] == "max_tokens":
     #     print("ERROR: Tokens maxed out on prompt. Memories are getting too long.")
 
-    return response_str, new_memory, new_mood
+    response = await parseGPTResponse(response_str)
+    return response
 
 
 def getMood(bot, message_context_list, memory) -> (str, str):
