@@ -426,12 +426,12 @@ def cullMemories(memory, explain=False):
         try:
             if explain:
                 response = promptGPT(prompt)["string"]
-                logging.info(response)
+                logging.info(f"Cull memory response: {response}")
                 return int(response[-2:].strip())
             else:
                 return int(promptGPT(prompt)["string"])
-        except ValueError as e:
-            raise e
+        except ValueError:
+            logging.error(f"Memory cull failed.")
 
     success = False
     result = ""
