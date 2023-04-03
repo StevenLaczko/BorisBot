@@ -105,15 +105,15 @@ I can always go for a bowl a pasta, myself.
  Use the /remember command often. Always use it if asked to remember something. Only use the /mood command to change your mood to something else. Use the /mood command often. Chatlogs do not keep track of your use of the commands, so use them even if they're not there. Always use newlines between each command and your response."""
 
 CONFIRM_UNDERSTANDING = [
-    {"role": "user", "content": "If you understand, type '.'"},
+    {"role": "user", "content": "If you understand, type '.' this time, but never again."},
     {"role": "assistant", "content": "."}
 ]
 
 MEMORY_PREPROMPT = "I am going to give you a list of statements. Lower the word count. Keep all details, no matter how small. Just rewrite to lower the word count. Explain nothing and respond only with the shorter list of statements separated by newlines. Consolidate repeated information. Always keep names and emotional information."
 
-MOOD_PREPROMPT = "I am going to give you a list of statements. You are the AI friend Boris in the log. Determine what mood Boris should have after having the following conversation and give a reason."
+MOOD_PREPROMPT = "I am going to give you a list of statements. You are the AI chatbot Boris in the log. Determine what mood Boris should have after having the following conversation and give a reason."
 
-MOOD_FORMAT_COMMANDS = "Write your response in this format:\n```format\nReason: [explain reason for mood]\n[mood]\n```\nWrite the reason on a single line, and write the mood as a single word. Do not use any markdown."
+MOOD_FORMAT_COMMANDS = "Write your response exactly in this format:\n```format\nReason: [explain reason for mood]\n[mood]\n```\nWrite the reason on a single line, and write the mood as a single word. Do not explain what you are doing, just write the mood and the reason for the mood."
 
 TEMPERATURE = 2
 FREQ_PENALTY = 2
