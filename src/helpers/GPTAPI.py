@@ -451,9 +451,14 @@ def cullMemories(memory, explain=False):
     if success:
         logging.info(f"Culling memory: '{memory[result - 1]}'")
         culled = memory.pop(result - 1)
-        with open(DiscordBot.getFilePath("culled_memories.json"), 'rw+') as f:
+        # TODO generate files on startup
+        open(DiscordBot.getFilePath("culled_memories.json"), "w+")
+        l = None
+        with open(DiscordBot.getFilePath("culled_memories.json"), 'r') as f:
             l: list[str] = json.loads(f.read()) if f.read() != "" else []
             l.append(culled)
+
+        with open(DiscordBot.getFilePath("culled_memories.json"), 'w') as f:
             f.write(json.dumps(l))
 
         return result if success else None
