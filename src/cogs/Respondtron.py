@@ -45,6 +45,7 @@ MAX_CONTEXT_WORDS = 100
 MAX_CONVO_WORDS = 200
 MEMORY_CHANCE = 1
 CONVO_END_DELAY = datetime.timedelta(minutes=3)
+ADD_COMMAND_REACTIONS = True
 RESPONSE_FILENAME = "responses.txt"
 MEMORY_FILENAME = "memories.json"
 
@@ -468,10 +469,12 @@ class Respondtron(commands.Cog):
                                                                 self.currentConversations[message.channel.id],
                                                                 memory=_memory, mood=_mood)
         if bot_response.new_memory:
-            message.add_reaction('🤔')
+            if ADD_COMMAND_REACTIONS:
+                message.add_reaction('🤔')
             await self.saveMemory(bot_response.new_memory)
         if bot_response.new_mood:
-            message.add_reaction('☝')
+            if ADD_COMMAND_REACTIONS:
+                message.add_reaction('☝')
             self.mood = (bot_response.new_mood, "")
         if bot_response.response_str:
             logging.info(f"Response: {bot_response.response_str}")
