@@ -1,7 +1,7 @@
 from enum import IntEnum
 import datetime
 import pickle
-from src.helpers import StringMatchHelp
+from src.cogs.Respondtron import StringMatchHelp
 
 
 class DURATIONS(IntEnum):

@@ -2,15 +2,13 @@ import enum
 from typing import Union
 
 import discord
-from dotenv import load_dotenv
 import logging
-import os
 import openai
 import pytz, datetime
 
 from src.helpers import DiscordBot
-from src.helpers.BotResponse import BotResponse
-from src.helpers.Conversation import Conversation
+from src.cogs.Respondtron.BotResponse import BotResponse
+from src.cogs.Respondtron.Conversation import Conversation
 import json
 import os
 
@@ -68,7 +66,7 @@ RESPONSE_EXAMPLE = [
     ```Example Response
     What's so doggon crazy about it, boys?
     !REMEMBER "Steven and Kristian don't know southern slang."
-    !MOOD Dejected
+    !MOOD Dejected because Steven and Kristian made fun of me for saying "doggonit!"
     ``` """
 ]
 THREE_COMMAND_FINAL_INSTRUCTIONS = [
@@ -80,18 +78,18 @@ THREE_COMMAND_FINAL_INSTRUCTIONS = [
 THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands. You can use any number of the commands per response, but only once each. To remember something or change your own Mood, use this format:
 ```example1
 {RESPOND_COMMAND} Ah that's real interestin'! I'd never have thunk.
-{MOOD_COMMAND} Interested
+{MOOD_COMMAND} Interested because Steven told me something I didn't know
 ```
 ```example2
 {RESPOND_COMMAND} Oh you like pasta huh? I can always go for a bowl a pasta, myself.
-{REMEMBER_COMMAND} Steven likes pasta
+{REMEMBER_COMMAND} Steven and I like pasta
  ```
 ```example3
-{RESPOND_COMMAND} I'd recommend havin' a Medic, a Heavy, a Demoman, and a Soldier. And if ya got a good team, have someone keep an eye on the flanks.
-{REMEMBER_COMMAND} Alec asked about the best team composition on Upward.
-{MOOD_COMMAND} Helpful
+{RESPOND_COMMAND} I'd recommend havin' a Medic, a Heavy, a Demoman, and a Soldier on Upward. And if ya got a good team, have someone keep an eye on the flanks.
+{REMEMBER_COMMAND} I told Alec a medic, heavy, demoman, and solder are the best team comp on Upward in TF2.
+{MOOD_COMMAND} Helpful because Alec asked about TF2 team composition
  ```
-If there is something to remember, use {REMEMBER_COMMAND}. If you want to change your mood, use {MOOD_COMMAND}."""
+If there is something to remember, include all details and use {REMEMBER_COMMAND}. If you want to change your mood, use {MOOD_COMMAND}."""
 
 COMMAND_INSTRUCTIONS = f"""You have access to a Remember and a Mood command. You can use one, both, or neither of the commands. To remember something or change your own Mood, use this format:
 ```example1
@@ -113,7 +111,7 @@ MEMORY_PREPROMPT = "I am going to give you a list of statements. Lower the word 
 
 MOOD_PREPROMPT = "I am going to give you a list of statements. You are the AI friend Boris in the log. Determine what mood Boris should have after having the following conversation and give a reason."
 
-MOOD_FORMAT_COMMANDS = "Write your response in this format:\n```format\nReason: [explain reason for mood]\n[mood]\n```\nWrite the reason on a single line, and write the mood as a single word. Do not use any markdown."
+MOOD_FORMAT_COMMANDS = "Write your response in this format:\n```format\n\n[mood] because [reason for mood]\n```\nWrite everything on a single line. Do not use any markdown."
 
 TEMPERATURE = 2
 FREQ_PENALTY = 2
@@ -252,56 +250,14 @@ def buildGPTMessageLog(*args):
     return result
 
 
-def getMoodString(mood: (str, str)):
-    result = ""
-    if len(mood) != 0:
-        result = f"Boris' current mood is {mood[0]}"
-        if len(mood) > 1 and mood[1] and len(mood[1]) > 0:
-            result += f" because: {mood[1]}"
-        result += "\nRespond in that manner."
+def getMoodString(mood: str):
+    result = f"Boris' current mood is {mood}\nRespond in that manner."
     logging.info(f"Current mood is {mood}")
     return ""
 
 
 def getCurrentTimeString():
     return f"Current date/time: {datetime.datetime.now().strftime(DATETIME_FSTRING)}"
-
-
-async def getCommands(bot, message, response_str, message_context_list: list[discord.Message], memory: list[str]):
-    openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
-    openai.api_key = os.environ.get("OPENAI_API_KEY")
-    last_response = createGPTMessage(response_str, Role.ASSISTANT)
-    system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
-    prompt = buildGPTMessageLog(system,
-                                CHARACTER_PROMPT,
-                                getMemoryString(memory),
-                                # STANDALONE_COMMAND_INSTRUCTIONS,
-                                CONFIRM_UNDERSTANDING,
-                                getContextGPTPlainMessages(bot, message_context_list))
-    response = promptGPT(prompt)["string"]
-    response_split = response.split('\n')
-    new_mood = new_memory = None
-    for l in response_split:
-        if l.startswith(REMEMBER_COMMAND):
-            new_memory = l[len(REMEMBER_COMMAND):]
-            await message.add_reaction('🤔')
-            logging.info(f"Remembering: {new_memory}")
-        elif l.startswith(MOOD_COMMAND):
-            new_mood = l[len(MOOD_COMMAND):]
-            await message.add_reaction('☝')
-            logging.info(f"Mood set to: {new_mood}")
-        elif len(l) > 0:
-            r = l
-            if l.startswith("You:"):
-                r = l[len("You:"):].strip()
-            if l.startswith("Boris:"):
-                r = l[len("Boris:"):].strip()
-            if len(response_str) > 0:
-                response_str += '\n'
-            response_str += r
-
-    return new_mood, new_memory
-
 
 async def parseGPTResponse(full_response_str) -> BotResponse:
     response_split = full_response_str.split('\n')
@@ -333,14 +289,12 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
                          use_plaintext: bool,
                          conversation: Conversation,
                          memory: list[str] = None,
-                         mood: (str, str) = None) -> BotResponse:
+                         mood: str = "") -> BotResponse:
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
     message_context_list.append(message)
     system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
-    if not mood:
-        mood = []
     chatlog = ""
     if use_plaintext:
         chatlog = getContextGPTPlainMessages(bot, message_context_list)
@@ -372,16 +326,14 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
     return response
 
 
-def getMood(bot, message_context_list, memory) -> (str, str):
+def getMood(bot, message_context_list, memory) -> str:
     chatlog = getContextGPTPlainMessages(bot, message_context_list)
     prompt = buildGPTMessageLog(getMemoryString(memory),
                                 chatlog,
                                 MOOD_PREPROMPT,
                                 MOOD_FORMAT_COMMANDS,
                                 CONFIRM_UNDERSTANDING)
-    result = promptGPT(prompt)["string"].split('\n')
-    if len(result) > 2:
-        return None
+    result = promptGPT(prompt)["string"]
     return result
 
 
@@ -393,7 +345,7 @@ def getMemoryWordCount(memory):
     return word_count
 
 
-def shrinkMemories(memory, explain=False):
+def shrinkMemoriesGPT(memory, explain=False):
     memory_str = '\n'.join(memory)
     memory_message = createGPTMessage(memory_str, Role.USER)
     prompt = buildGPTMessageLog(MEMORY_PREPROMPT, CONFIRM_UNDERSTANDING, memory_message)
@@ -414,6 +366,7 @@ def cullMemories(memory, explain=False):
     else:
         explain_str = "Tell me the number, alone, saying nothing else."
     numbered_memories = '\n'.join([f"{i + 1} - {m}" for i, m in enumerate(memory)])
+    # TODO fix this. He doesn't only return a number anymore.
     cull_preprompt = [
         {"role": "user", "content": f"""\
     I will give you a list of memories for an AI named Boris. They will be numbered. Determine the one that is least personally significant/interesting. Delete repeated information. {explain_str}
