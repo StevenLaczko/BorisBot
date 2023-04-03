@@ -109,7 +109,7 @@ CONFIRM_UNDERSTANDING = [
     {"role": "assistant", "content": "."}
 ]
 
-MEMORY_PREPROMPT = "I am going to give you a list of statements. Lower the word count. Keep all details, no matter how small. Just rewrite to lower the word count. Explain nothing and respond only with the shorter list of statements separated by newlines. Keep each memory separate. Always keep names."
+MEMORY_PREPROMPT = "I am going to give you a list of statements. Lower the word count. Keep all details, no matter how small. Just rewrite to lower the word count. Explain nothing and respond only with the shorter list of statements separated by newlines. Consolidate repeated information. Always keep names and emotional information."
 
 MOOD_PREPROMPT = "I am going to give you a list of statements. You are the AI friend Boris in the log. Determine what mood Boris should have after having the following conversation and give a reason."
 
@@ -414,7 +414,7 @@ Short explanation: Reminder that is no longer relevant
     numbered_memories = '\n'.join([f"{i + 1} - {m}" for i, m in enumerate(memory)])
     cull_preprompt = [
         {"role": "user", "content": f"""\
-    I will give you a list of memories for an AI named Boris. They will be numbered. Determine the one that is least personally significant/interesting. Delete repeated information. {explain_str}
+    I will give you a list of memories for an AI chatbot named Boris. They will be numbered. Determine the one that is least likely to come up in later conversation. Delete repeated information. {explain_str}
     If you understand, type '.'."""},
         {"role": "assistant", "content": '.'},
         {"role": "user", "content": numbered_memories}
