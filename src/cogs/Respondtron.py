@@ -76,7 +76,7 @@ class Respondtron(commands.Cog):
         self.loadSettings(args)
         self.currentConversations: dict[int, Conversation] = {}
         self.memory: list[str] = []
-        self.mood: (str, str) = []  # mood, reason
+        self.mood: str = ""  # mood
 
         # load memories
         if os.path.isfile(self.memoryFilePath):
@@ -475,7 +475,7 @@ class Respondtron(commands.Cog):
         if bot_response.new_mood:
             if ADD_COMMAND_REACTIONS:
                 message.add_reaction('☝')
-            self.mood = (bot_response.new_mood, "")
+            self.mood = bot_response.new_mood
         if bot_response.response_str:
             logging.info(f"Response: {bot_response.response_str}")
             msg = await message.channel.send(bot_response.response_str)

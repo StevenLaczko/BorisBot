@@ -252,15 +252,12 @@ def buildGPTMessageLog(*args):
     return result
 
 
-def getMoodString(mood: (str, str)):
+def getMoodString(mood: str):
     result = ""
     if len(mood) != 0:
-        result = f"Boris' current mood is {mood[0]}"
-        if len(mood) > 1 and mood[1] and len(mood[1]) > 0:
-            result += f" because: {mood[1]}"
-        result += "\nRespond in that manner."
+        result = f"Boris' current mood is {mood[0]}\nRespond in that manner."
     logging.info(f"Current mood is {mood}")
-    return ""
+    return result
 
 
 def getCurrentTimeString():
@@ -333,14 +330,12 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
                          use_plaintext: bool,
                          conversation: Conversation,
                          memory: list[str] = None,
-                         mood: (str, str) = None) -> BotResponse:
+                         mood: str = "") -> BotResponse:
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
     message_context_list.append(message)
     system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
-    if not mood:
-        mood = []
     chatlog = ""
     if use_plaintext:
         chatlog = getContextGPTPlainMessages(bot, message_context_list)
@@ -379,9 +374,7 @@ def getMood(bot, message_context_list, memory) -> (str, str):
                                 MOOD_PREPROMPT,
                                 MOOD_FORMAT_COMMANDS,
                                 CONFIRM_UNDERSTANDING)
-    result = promptGPT(prompt)["string"].split('\n')
-    if len(result) > 2:
-        return None
+    result = promptGPT(prompt)["string"]
     return result
 
 
