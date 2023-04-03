@@ -403,7 +403,7 @@ def shrinkMemories(memory, explain=False):
 
 def cullMemories(memory, explain=False):
     if explain:
-        explain_str = "\nWrite your output exactly in this format:\n```\nShort explanation: [explanation]\n[number]```"
+        explain_str = "\nWrite your output exactly in this format but without parentheses:\n```\nShort explanation: (explanation)\n(number without parentheses)```"
     else:
         explain_str = "Tell me the number, alone, saying nothing else."
     numbered_memories = '\n'.join([f"{i + 1} - {m}" for i, m in enumerate(memory)])
@@ -444,9 +444,14 @@ def cullMemories(memory, explain=False):
     if success:
         logging.info(f"Culling memory: '{memory[result - 1]}'")
         culled = memory.pop(result - 1)
-        with open(DiscordBot.getFilePath("culled_memories.json"), 'rw+') as f:
+        # TODO generate files on startup
+        open(DiscordBot.getFilePath("culled_memories.json"), "w+")
+        l = None
+        with open(DiscordBot.getFilePath("culled_memories.json"), 'r') as f:
             l: list[str] = json.loads(f.read()) if f.read() != "" else []
             l.append(culled)
+
+        with open(DiscordBot.getFilePath("culled_memories.json"), 'w') as f:
             f.write(json.dumps(l))
 
         return result if success else None
