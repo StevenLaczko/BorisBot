@@ -410,7 +410,7 @@ def shrinkMemories(memory, explain=False):
 
 def cullMemories(memory, explain=False):
     if explain:
-        explain_str = "\nWrite your output exactly in this format:\n```\nShort explanation: [explanation]\n[number]```"
+        explain_str = "\nWrite your output exactly in this format but without parentheses:\n```\nShort explanation: (explanation)\n(number without parentheses)```"
     else:
         explain_str = "Tell me the number, alone, saying nothing else."
     numbered_memories = '\n'.join([f"{i + 1} - {m}" for i, m in enumerate(memory)])
