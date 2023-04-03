@@ -131,8 +131,11 @@ class Respondtron(commands.Cog):
                 continue
             dt = CONVO_END_DELAY
             if self.currentConversations[c].timestamp + dt < now:
-                channel = message.guild.get_channel(c)
-                await self.stopConversation(channel)
+                channel = self.currentConversations[c].guild.get_channel(c)
+                if not channel:
+                    logging.error(f"Channel from id {c} is None")
+                else:
+                    await self.stopConversation(channel)
 
         botID = self.bot.user.id
         if message.author.id == botID:
@@ -476,7 +479,7 @@ class Respondtron(commands.Cog):
     async def replyToMessage(self, message):
         logging.info("Responding")
         if message.channel.id not in self.currentConversations or not self.currentConversations[message.channel.id]:
-            self.currentConversations[message.channel.id] = Conversation(datetime.datetime.now())
+            self.currentConversations[message.channel.id] = Conversation(message.guild, timestamp=datetime.datetime.now())
         # get trigger
         message_string = message.clean_content.strip()
         triggerList = message_string.split()[1:]
