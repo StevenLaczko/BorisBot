@@ -1,6 +1,8 @@
 import json
 from typing import Union
 
+import discord
+
 from src.cogs.Respondtron import StringMatchHelp, GPTAPI, Prompts
 import logging
 
@@ -42,7 +44,12 @@ class BotBrain:
             self.contexts["main"] = Context("main")
         self.memoryMatchProb = memory_match_prob
         self.contextsFilePath = contexts_file_path
-        self.currentConversations: dict[int, Conversation] = conversations if conversations else {}
+        self.currentConversations: dict[int, Union[Conversation, None]] = conversations if conversations else {}
+
+    def isMessageInConversation(self, message: discord.Message):
+        if message.channel.id in self.currentConversations and self.currentConversations[message.channel.id]:
+            return self.currentConversations[message.channel.id]
+        return None
 
     def getMemoriesString(self, pool):
         memory_str = "```Memories\n"
@@ -72,6 +79,11 @@ class BotBrain:
             self.saveMemory(pool, _memory)
         else:
             logging.info(f"Storing no memories from conversation of length {len(conversation_log)}")
+
+    def getMemories(self, pool: str) -> list[str]:
+        context = self.getMemoryPool(pool)
+        if context:
+            return context.memories
 
     def getMemoryPool(self, pool: str) -> Union[Context, None]:
         if pool not in self.contexts:

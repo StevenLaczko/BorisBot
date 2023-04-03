@@ -163,28 +163,27 @@ class Respondtron(commands.Cog):
         elif botID in mention_ids:
             logging.warning(self.bot.user.name + " mention DETECTED")
             message.activity = {"party_id": "Hi there :)\nsup"}
-            await self.replyToMessage(message)
+            await self.replyToMessage(message, conversation)
         elif "boris" in message.clean_content.lower():
             logging.warning("I heard my name.")
-            if (message.channel.id in self.botBrain.currentConversations and self.botBrain.currentConversations[
-                message.channel.id]) or 0.2 > random.random():
-                await self.replyToMessage(message)
-        elif message.channel.id in self.botBrain.currentConversations and self.botBrain.currentConversations[message.channel.id]:
+            if self.botBrain.isMessageInConversation(message) or 0.2 > random.random():
+                await self.replyToMessage(message, conversation)
+        elif self.botBrain.isMessageInConversation(message):
             logging.warning("Message received in convo channel")
             self.botBrain.currentConversations[message.channel.id].timestamp = datetime.datetime.now()
             if 0.3 > random.random():
-                await self.replyToMessage(message)
+                await self.replyToMessage(message, conversation)
         # TODO 5% chance asks GPT if it's relevant to Boris or his memories
         elif 0.05 > random.random():
-            await self.replyToMessage(message)
+            await self.replyToMessage(message, conversation)
 
     async def stopConversation(self, channel):
         logging.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
         self.botBrain.currentConversations[channel.id] = None
         if MEMORY_CHANCE > random.random():
             context = await self.getConvoContext(channel, after=None, ignore_list=IGNORE_LIST)
-            await self.storeMemory(context)
-            await self.setMood(context)
+            await self.botBrain.storeMemory("main", self.bot, context)
+            await self.botBrain.setMood("main", GPTAPI.getMood(self.bot, context, self.botBrain.getMemoryPool("main")))
 
     # teach
     # teach allows the bot to learn new trigger/response pairs
@@ -458,7 +457,8 @@ class Respondtron(commands.Cog):
         if bot_response.response_str:
             logging.info(f"Response: {bot_response.response_str}")
             msg = await message.channel.send(bot_response.response_str)
-            self.botBrain.currentConversations[message.channel.id].bot_messageid_response[msg.id] = bot_response.full_response
+            self.botBrain.currentConversations[message.channel.id].bot_messageid_response[
+                msg.id] = bot_response.full_response
 
     def getLearnedReply(self, message):
         # get trigger
@@ -501,15 +501,18 @@ class Respondtron(commands.Cog):
             logging.info("Response: " + response)
             return response
 
-    async def replyToMessage(self, message, brain_context):
+    async def replyToMessage(self, message, conversation):
         logging.info("Responding")
-        if message.channel.id not in self.botBrain.currentConversations or not self.botBrain.currentConversations[message.channel.id]:
-            self.botBrain.currentConversations[message.channel.id] = Conversation(message.guild, brain_context, timestamp=datetime.datetime.now())
+        context = conversation.context if conversation else "main"
+        if message.channel.id not in self.botBrain.currentConversations or not self.botBrain.currentConversations[
+            message.channel.id]:
+            self.botBrain.currentConversations[message.channel.id] = Conversation(message.guild, context,
+                                                                                  timestamp=datetime.datetime.now())
         learnedReply = self.getLearnedReply(message)
         if len(learnedReply) > 0:
             await message.channel.send(learnedReply)
         else:
-            await self.replyGPT(message, brain_context)
+            await self.replyGPT(message, context)
 
     async def botMatchString(self, str1, str2):
         args = StringMatchHelp.fuzzyMatchString(str1, str2, self.settings[ARGS.WEIGHTS], self.settings[ARGS.PROB_MIN])
