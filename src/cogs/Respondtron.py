@@ -427,7 +427,7 @@ class Respondtron(commands.Cog):
     async def saveMemory(self, _memory, shrink=True, _explain=True):
         for m in self.memory:
             isMatch, probability = await self.botMatchString(m, _memory)
-            if isMatch:
+            if probability > 0.85:
                 close = m
                 logging.info(f"Not saving memory. Too close to {close}, probability {probability}")
                 return
