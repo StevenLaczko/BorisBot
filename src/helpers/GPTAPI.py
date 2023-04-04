@@ -24,8 +24,9 @@ class Role(enum.Enum):
 DATETIME_FSTRING = "%m/%d/%Y %I:%M%p"
 
 SYSTEM_MESSAGE = None
+TIMESTAMP_FSTR = "%m/%d/%Y %I:%M%p"
 CHARACTER_PROMPT = [
-    f"Alright partner, you will be actin' as a chatbot named Boris. Boris acts and speaks like the Engi from TF2, but he was made by a fella named Steven."
+    f"Alright partner, you will be actin' as Boris. Boris acts and speaks like the Engi from TF2, but he was made by a fella named Steven."
 ]
 DIALECT_EXAMPLES = [
     {"role": "user", "content": "List some examples of the Engineer from TF2 as a dialect example."},
@@ -110,7 +111,16 @@ CONFIRM_UNDERSTANDING = [
 ]
 
 # TODO make bot not list them with -'s or "'s. encourage more consolidation.
-MEMORY_SHRINK_PROMPT = "Given the above memories of a chatbot named Boris, lower the character count. While keeping all information, consolidate by rewriting in a concise format with a line for each memory. Use as little punctuation as possible. Do not put memories in quotes. You can't use dashes, but can indent lines. Explain nothing and respond only with the shorter list of statements separated by newlines. Always keep names and emotional information."
+MEMORY_SHRINK_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
+While keeping all information, consolidate by combining information and condensing the information in each line.
+Always keep names and emotional information.
+Keep lines separate. Use minimal punctuation.
+Explain nothing and respond only with a newline-separated list of memories.
+```Example Response
+Boris likes pocky.
+Kristian loves to rock climb.
+Steven wants to adjust the color of Boris' hard-hat.
+```"""
 
 MOOD_PREPROMPT = "I am going to give you a list of statements. You are the AI chatbot Boris in the log. Determine what mood Boris should have after having the following conversation and give a reason."
 
@@ -148,7 +158,7 @@ def promptGPT(gptMessages, temperature=TEMPERATURE, frequency_penalty=FREQ_PENAL
 def getMessageStr(bot, message, writeBotName=False):
     local_tz = pytz.timezone("America/New_York")
     local_timestamp = message.created_at.astimezone(local_tz)
-    local_timestamp_str = local_timestamp.strftime("%m/%d/%Y %I:%M%p")
+    local_timestamp.strftime(TIMESTAMP_FSTR)
     if writeBotName or bot.user.id != message.author.id:
         name = id_name_dict[str(message.author.id)] if str(message.author.id) in id_name_dict else None
         nick_str = message.author.name
@@ -156,7 +166,7 @@ def getMessageStr(bot, message, writeBotName=False):
         #     result = f"You: {message.clean_content}"
         # else:
         name_str = f"{name} (AKA {nick_str})" if name else nick_str
-        result = f"{name_str} ({local_timestamp_str}): {message.clean_content}"
+        result = f"{name_str} ({local_timestamp}): {message.clean_content}"
     else:
         result = message.clean_content
 
@@ -268,6 +278,9 @@ def getMoodString(mood: str):
     logging.info(f"Current mood is {mood}")
     return result
 
+def getChannelString(channel: discord.TextChannel):
+    return f"You are talking in the {channel.name} channel."
+
 
 def getCurrentTimeString():
     return f"Current date/time: {datetime.datetime.now().strftime(DATETIME_FSTRING)}"
@@ -343,25 +356,26 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-    message_context_list.append(message)
     system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
     chatlog = ""
-    if use_plaintext:
-        chatlog = getContextGPTPlainMessages(bot, message_context_list)
-    else:
-        chatlog = getContextGPTChatlog(bot, message_context_list)
+    # if use_plaintext:
+    #     chatlog = getContextGPTPlainMessages(bot, message_context_list)
+    # else:
+    #     chatlog = getContextGPTChatlog(bot, message_context_list)
 
     context = getContextGPTMix(bot, message_context_list, conversation)
     prompt = buildGPTMessageLog(system,
                                 CHARACTER_PROMPT,
                                 getMemoryString(memory),
-                                getCurrentTimeString(),
-                                getMoodString(mood),
+                                getCurrentTimeString() + '\n'
+                                + getMoodString(mood) + '\n'
+                                + getChannelString(message.channel),
                                 THREE_COMMAND_INSTRUCTIONS,
                                 COMMAND3_RESPONSE_EXAMPLE,
                                 THREE_COMMAND_FINAL_INSTRUCTIONS,
                                 CONFIRM_UNDERSTANDING,
-                                *context
+                                *context,
+                                getMessageStr(bot, message)
                                 )
 
     logging.info(f"Getting GPT response for '{message.clean_content}'")
@@ -407,7 +421,12 @@ def shrinkMemories(memory, explain=False):
     before_word_count = getMemoryWordCount(memory)
     before_char_count = getMemoryCharCount(memory)
     if before_word_count > MEMORY_WORD_COUNT_MAX / 2:
-        memory = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"].split('\n')
+        response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
+
+        memory = []
+        for m in response.split('\n'):
+            if len(m.strip()) > 0:
+                memory.append(m)
         logging.info("Minimized memories.")
         if getMemoryWordCount(memory) > MEMORY_WORD_COUNT_MAX:
             cullMemories(memory, explain=explain)
@@ -417,21 +436,24 @@ def shrinkMemories(memory, explain=False):
 
 def cullMemories(memory, explain=False):
     if explain:
-        explain_str = """\nWrite your output exactly in this format but without parentheses:\n```\nShort explanation: (explanation)\n(number without parentheses)```
+        explain_str = """Write your output exactly in this format but without parentheses:
+```Format
+Explanation: (reason for deletion)
+(number without parentheses)
+```
 For example, 
 ```Example Response
-Short explanation: Reminder that is no longer relevant
+Explanation: This is a reminder that is no longer relevant
 13
 ```"""
     else:
         explain_str = "Tell me the number, alone, saying nothing else."
     numbered_memories = '\n'.join([f"{i + 1} - {m}" for i, m in enumerate(memory)])
     cull_preprompt = [
-        {"role": "user", "content": f"""\
-    Given the above memories of the chatbot Boris who wants to act human, determine the one that Boris cares about the least. Delete repeated information. {explain_str}
-    If you understand, type '.'."""},
+        {"role": "user", "content": f"""{numbered_memories}
+Given the above memories of Boris, who is a friendly southerner, determine the one that Boris and his friends likely care about the least. Names in the memories are friends of Boris. Target repeated information. {explain_str}
+If you understand, type '.' once."""},
         {"role": "assistant", "content": '.'},
-        {"role": "user", "content": numbered_memories}
     ]
 
     def parse_choice(prompt, explain):

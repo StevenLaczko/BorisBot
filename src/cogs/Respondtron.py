@@ -436,6 +436,11 @@ class Respondtron(commands.Cog):
                 logging.info(f"Not saving memory. Too close to {close}, probability {probability}")
                 return
 
+        local_tz = pytz.timezone("America/New_York")
+        local_timestamp = datetime.datetime.now(local_tz)
+        ts = local_timestamp.strftime(GPTAPI.TIMESTAMP_FSTR)
+        _memory = f"[{ts}] {_memory}"
+        logging.info(f"Saving new memory: {_memory}")
         self.memory.append(_memory.lower())
         if shrink:
             self.memory = GPTAPI.shrinkMemories(self.memory, explain=_explain)
@@ -468,6 +473,10 @@ class Respondtron(commands.Cog):
         bot_response: BotResponse = await GPTAPI.getGPTResponse(self.bot, message, context, True,
                                                                 self.currentConversations[message.channel.id],
                                                                 memory=_memory, mood=_mood)
+        if bot_response.response_str:
+            logging.info(f"Response: {bot_response.response_str}")
+            msg = await message.channel.send(bot_response.response_str)
+            self.currentConversations[message.channel.id].bot_messageid_response[msg.id] = bot_response.full_response
         if bot_response.new_memory:
             if ADD_COMMAND_REACTIONS:
                 await message.add_reaction('🤔')
@@ -476,10 +485,6 @@ class Respondtron(commands.Cog):
             if ADD_COMMAND_REACTIONS:
                 await message.add_reaction('☝')
             self.mood = bot_response.new_mood
-        if bot_response.response_str:
-            logging.info(f"Response: {bot_response.response_str}")
-            msg = await message.channel.send(bot_response.response_str)
-            self.currentConversations[message.channel.id].bot_messageid_response[msg.id] = bot_response.full_response
 
     async def replyToMessage(self, message):
         logging.info("Responding")
