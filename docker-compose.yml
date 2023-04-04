@@ -1,17 +1,14 @@
 version: '3'
 
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: always
-    volumes:
-      - ./data:/app/data
-      - ./obj:/app/obj
-    env_file:
-      - .env
-
-volumes:
-    data:
-    obj:
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        restart: always
+        volumes:
+            - ./data:/app/data:rw
+            - ./obj:/app/obj:rw
+            - ./logs:/app/logs:rw
+        env_file:
+            - .env
