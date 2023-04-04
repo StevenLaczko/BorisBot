@@ -48,15 +48,15 @@ Kristian (04/01/2023 09:42PM): Yeah really
 ```Example Response
 !RESPOND What's so doggon crazy about it, boys?
 !REMEMBER Steven and Kristian don't know southern slang.
-!MOOD Dejected
+!MOOD Dejected because Steven and Kristian made fun of my use of the word "doggonit"
 ```
 ```Example Chatlog
 Steven (AKA Soda) (03/27/2023 03:05PM): Eh, I prefer the normal brickhouses. I like that woody taste. Maduros are too spicy imo @Boris
 ```
 ```Example Response
-!RESPOND Well now, to each their own, I reckon. Can't go wrong with the classic Brickhouse then.
+!RESPOND Well now, to each their own, I reckon. Can't go wrong with Brickhouse.
 !REMEMBER Steven likes Brickhouse cigars for their woody taste.
-!MOOD Agreeable
+!MOOD Agreeable because Steven and Boris both like Brickhouse cigars
 ```"""
 
 RESPONSE_EXAMPLE = [
@@ -80,7 +80,7 @@ THREE_COMMAND_FINAL_INSTRUCTIONS = [
 THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands. You can use any number of the commands per response, but only once each. To remember something or change your own Mood, use this format:
 ```example1
 {RESPOND_COMMAND} Ah that's real interestin'! I'd never have thunk.
-{MOOD_COMMAND} Interested
+{MOOD_COMMAND} Interested because I learned something new
 ```
 ```example2
 {RESPOND_COMMAND} Oh you like pasta huh? I can always go for a bowl a pasta, myself.
@@ -89,7 +89,7 @@ THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {
 ```example3
 {RESPOND_COMMAND} I'd recommend havin' a Medic, a Heavy, a Demoman, and a Soldier. And if ya got a good team, have someone keep an eye on the flanks.
 {REMEMBER_COMMAND} Alec asked about the best team composition on Upward.
-{MOOD_COMMAND} Helpful
+{MOOD_COMMAND} Helpful because Alec asked a question about tf2 team composition
  ```
 If there is something to remember, use {REMEMBER_COMMAND}. If you want to change your mood, use {MOOD_COMMAND}."""
 
@@ -100,7 +100,7 @@ Ah my name is Boris, huh partner? Well I'll remember that.
 ```
 ```example2
 I can always go for a bowl a pasta, myself.
-{MOOD_COMMAND} Hungry
+{MOOD_COMMAND} Hungry because I want pasta
  ```
  Use the /remember command often. Always use it if asked to remember something. Only use the /mood command to change your mood to something else. Use the /mood command often. Chatlogs do not keep track of your use of the commands, so use them even if they're not there. Always use newlines between each command and your response."""
 
@@ -109,11 +109,20 @@ CONFIRM_UNDERSTANDING = [
     {"role": "assistant", "content": "."}
 ]
 
-MEMORY_PREPROMPT = "I am going to give you a list of statements. Lower the word count. Keep all details, no matter how small. Just rewrite to lower the word count. Explain nothing and respond only with the shorter list of statements separated by newlines. Consolidate repeated information. Always keep names and emotional information."
+# TODO make bot not list them with -'s or "'s. encourage more consolidation.
+MEMORY_SHRINK_PROMPT = "Given the above memories of a chatbot named Boris, lower the character count. While keeping all information, consolidate by rewriting in a concise format with a line for each memory. Use as little punctuation as possible. Do not put memories in quotes. You can't use dashes, but can indent lines. Explain nothing and respond only with the shorter list of statements separated by newlines. Always keep names and emotional information."
 
 MOOD_PREPROMPT = "I am going to give you a list of statements. You are the AI chatbot Boris in the log. Determine what mood Boris should have after having the following conversation and give a reason."
 
-MOOD_FORMAT_COMMANDS = "Write your response exactly in this format:\n```format\nReason: [explain reason for mood]\n[mood]\n```\nWrite the reason on a single line, and write the mood as a single word. Do not explain what you are doing, just write the mood and the reason for the mood."
+MOOD_FORMAT_COMMANDS = """Write your response exactly in this format:\n```format\n[mood] because [explain reason for mood]\n```
+Write everything on one wile. Do not explain what you are doing, just write the mood and the reason for the mood.
+```Example1
+Determined because Steven asked for help on a hard project
+```
+```Example2
+Joyful because Boris was finally able to finish his crossword puzzle
+```
+"""
 
 TEMPERATURE = 2
 FREQ_PENALTY = 2
@@ -382,22 +391,27 @@ def getMemoryWordCount(memory):
     word_count = 0
     for m in memory:
         word_count += len(m.split())
-
     return word_count
 
+def getMemoryCharCount(memory):
+    char_count = 0
+    for m in memory:
+        char_count += len(m)
+    return char_count
 
 def shrinkMemories(memory, explain=False):
     memory_str = '\n'.join(memory)
     memory_message = createGPTMessage(memory_str, Role.USER)
-    prompt = buildGPTMessageLog(MEMORY_PREPROMPT, CONFIRM_UNDERSTANDING, memory_message)
+    prompt = buildGPTMessageLog(memory_message, MEMORY_SHRINK_PROMPT, CONFIRM_UNDERSTANDING)
 
     before_word_count = getMemoryWordCount(memory)
+    before_char_count = getMemoryCharCount(memory)
     if before_word_count > MEMORY_WORD_COUNT_MAX / 2:
         memory = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"].split('\n')
         logging.info("Minimized memories.")
         if getMemoryWordCount(memory) > MEMORY_WORD_COUNT_MAX:
             cullMemories(memory, explain=explain)
-    logging.info(f"Before shrink/cull: {before_word_count} words.\nAfter shrink: {getMemoryWordCount(memory)} words.")
+    logging.info(f"Result of shrinking memory: {before_char_count-getMemoryCharCount(memory)} less chars. {before_word_count-getMemoryWordCount(memory)} less words.")
     return memory
 
 
@@ -414,7 +428,7 @@ Short explanation: Reminder that is no longer relevant
     numbered_memories = '\n'.join([f"{i + 1} - {m}" for i, m in enumerate(memory)])
     cull_preprompt = [
         {"role": "user", "content": f"""\
-    I will give you a list of memories for an AI chatbot named Boris. They will be numbered. Determine the one that is least likely to come up in later conversation. Delete repeated information. {explain_str}
+    Given the above memories of the chatbot Boris who wants to act human, determine the one that Boris cares about the least. Delete repeated information. {explain_str}
     If you understand, type '.'."""},
         {"role": "assistant", "content": '.'},
         {"role": "user", "content": numbered_memories}
