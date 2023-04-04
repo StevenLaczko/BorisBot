@@ -525,7 +525,8 @@ class Respondtron(commands.Cog):
             logging.info("Response: " + response)
             await message.channel.send(response)
         else:
-            await self.replyGPT(message)
+            async with message.channel.typing():
+                await self.replyGPT(message)
             return
 
     async def botMatchString(self, str1, str2):
