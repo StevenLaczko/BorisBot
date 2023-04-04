@@ -1,6 +1,5 @@
-import logging
+from src.helpers.logging_config import logger
 import os
-import sys
 import traceback
 
 from discord.ext import commands
@@ -14,8 +13,6 @@ EXTENSIONS = [
 
 os.makedirs("logs/", exist_ok=True)
 open("logs/info.log", 'w+')
-logging.basicConfig(filename="logs/info.log", level=logging.INFO)
-
 
 class DiscordBot(commands.Bot):
     def __init__(self, bot_prefix):
@@ -45,7 +42,7 @@ class DiscordBot(commands.Bot):
             await self.add_cog(c)
 
     async def on_error(self, event, *args, **kwargs):
-        logging.error(traceback.format_exc())
+        logger.error(traceback.format_exc())
 
     async def send_message(self, channelID, message):
         channel = self.get_channel(channelID)

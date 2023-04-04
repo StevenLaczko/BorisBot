@@ -2,7 +2,7 @@ import datetime
 import json
 import os
 from typing import Union
-import logging
+from src.helpers.logging_config import logger
 
 import discord
 import pytz
@@ -84,7 +84,7 @@ class Respondtron(commands.Cog):
                 self.memory: list[str] = json.loads(memoryFile.read())
 
         # create backup of responses
-        logging.warning("Backing up response file")
+        logger.warning("Backing up response file")
         with open(self.responseFilePath, 'r') as responses:
             with open(self.responseFilePath, 'w+') as backup:
                 backup.write(responses.read())
@@ -118,7 +118,7 @@ class Respondtron(commands.Cog):
 
     def saveSettings(self, settings, file):
         save_obj(settings, file)
-        logging.info(f"Saved Settings: {settings}")
+        logger.info(f"Saved Settings: {settings}")
 
     # EVENTS
 
@@ -134,7 +134,7 @@ class Respondtron(commands.Cog):
             if self.currentConversations[c].timestamp + dt < now:
                 channel = self.currentConversations[c].guild.get_channel(c)
                 if not channel:
-                    logging.error(f"Channel from id {c} is None")
+                    logger.error(f"Channel from id {c} is None")
                 else:
                     await self.stopConversation(channel)
 
@@ -158,16 +158,16 @@ class Respondtron(commands.Cog):
         if "boris stop" in message.clean_content.lower():
             await self.stopConversation(message.channel)
         elif botID in mention_ids:
-            logging.warning(self.bot.user.name + " mention DETECTED")
+            logger.warning(self.bot.user.name + " mention DETECTED")
             message.activity = {"party_id": "Hi there :)\nsup"}
             await self.replyToMessage(message)
         elif "boris" in message.clean_content.lower():
-            logging.warning("I heard my name.")
+            logger.warning("I heard my name.")
             if (message.channel.id in self.currentConversations and self.currentConversations[
                 message.channel.id]) or 0.2 > random.random():
                 await self.replyToMessage(message)
         elif message.channel.id in self.currentConversations and self.currentConversations[message.channel.id]:
-            logging.warning("Message received in convo channel")
+            logger.warning("Message received in convo channel")
             self.currentConversations[message.channel.id].timestamp = datetime.datetime.now()
             if 0.3 > random.random():
                 await self.replyToMessage(message)
@@ -176,7 +176,7 @@ class Respondtron(commands.Cog):
             await self.replyToMessage(message)
 
     async def stopConversation(self, channel):
-        logging.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
+        logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
         self.currentConversations[channel.id] = None
         if MEMORY_CHANCE > random.random():
             context = await self.getConvoContext(channel, after=None, ignore_list=IGNORE_LIST)
@@ -190,12 +190,12 @@ class Respondtron(commands.Cog):
         # take in and sanitize trigger
         iterargs = iter(args)
         trigger = str(next(iterargs))
-        logging.info("Trigger: " + trigger)
+        logger.info("Trigger: " + trigger)
         trigger = re.sub(r'[^a-zA-Z ]', '', str(trigger).strip().lower())
 
         response = str(next(iterargs)) + ' '
         for arg in iterargs:
-            logging.info("Arg: " + str(arg))
+            logger.info("Arg: " + str(arg))
             response += str(arg) + ' '
         response = response.strip()
 
@@ -217,13 +217,13 @@ class Respondtron(commands.Cog):
             for i in range(len(weights)):
                 floatWeights.append(float(weights[i].strip(", ")))
 
-            logging.info(f"Weight list: {floatWeights}")
+            logger.info(f"Weight list: {floatWeights}")
 
             try:
                 self.setWeights(floatWeights)
                 await ctx.send("Weights set to " + str(floatWeights))
             except TypeError:
-                logging.error(sys.exc_info())
+                logger.error(sys.exc_info())
                 await ctx.send("Bad input, bud. Comma separated and between 0 and 1, please.")
             return
 
@@ -284,10 +284,10 @@ class Respondtron(commands.Cog):
                     iLargestWeight = i
 
             # increase weight of highest string matching factor
-            logging.info(f"Weight index changed: {iLargestWeight}")
-            logging.info(f"Change from: {weights[iLargestWeight]}")
+            logger.info(f"Weight index changed: {iLargestWeight}")
+            logger.info(f"Change from: {weights[iLargestWeight]}")
             weights[iLargestWeight] += 0.1
-            logging.info(f"To: {weights[iLargestWeight]}")
+            logger.info(f"To: {weights[iLargestWeight]}")
 
         elif not isGood:
             smallestWeight = 0
@@ -299,10 +299,10 @@ class Respondtron(commands.Cog):
                     iSmallestWeight = i
 
             # lower weight of lowest string matching factor
-            logging.info(f"Weight index changed: {smallestWeight}")
-            logging.info(f"Change from: {weights[iSmallestWeight]}")
+            logger.info(f"Weight index changed: {smallestWeight}")
+            logger.info(f"Change from: {weights[iSmallestWeight]}")
             weights[iSmallestWeight] -= 0.1
-            logging.info(f"To: {weights[iSmallestWeight]}")
+            logger.info(f"To: {weights[iSmallestWeight]}")
 
         self.settings[ARGS.WEIGHTS] = weights
 
@@ -334,7 +334,7 @@ class Respondtron(commands.Cog):
         # Adding Response
 
         if duplicate:
-            logging.info("Duplicate Response. Not adding.")
+            logger.info("Duplicate Response. Not adding.")
             return False
 
         # Add response to existing trigger
@@ -360,13 +360,13 @@ class Respondtron(commands.Cog):
             newTrigger = args[1]
             newResponse = args[2]
             with open(self.responseFilePath, 'a') as responses:
-                logging.info("Adding new trigger/response.\n Trigger: " + newTrigger)
+                logger.info("Adding new trigger/response.\n Trigger: " + newTrigger)
                 responses.write(newTrigger + SPLIT_CHAR + newResponse + "\n")
 
         elif len(args) == 2:
             lines = self.tempArgs[1]
             with open(self.responseFilePath, 'w') as responses:
-                logging.info("Added response to existing trigger")
+                logger.info("Added response to existing trigger")
                 responses.write(''.join(lines))
 
     async def searchMessages(self, searchTerm):
@@ -378,7 +378,7 @@ class Respondtron(commands.Cog):
 
     async def getContext(self, channel, before, after=False, num_messages_requested=None,
                          max_word_count=MAX_CONTEXT_WORDS, ignore_list=None):
-        logging.info("Getting context")
+        logger.info("Getting context")
         all_messages = []
         now = datetime.datetime.now(tz=pytz.UTC)
         if num_messages_requested is None:
@@ -404,8 +404,8 @@ class Respondtron(commands.Cog):
             if word_count > max_word_count or len(messages) < num_messages_requested:
                 do_repeat = False
 
-        logging.info(f"Number of messages looked at: {len(all_messages)}")
-        logging.info(f"Word count: {word_count}")
+        logger.info(f"Number of messages looked at: {len(all_messages)}")
+        logger.info(f"Word count: {word_count}")
         all_messages.reverse()
         return all_messages
 
@@ -416,8 +416,8 @@ class Respondtron(commands.Cog):
         try:
             message: discord.Message = [m async for m in channel.history(limit=2)][1]  # second to last message to start
         except IndexError as e:
-            logging.error("Not enough messages in channel to get context.")
-            logging.error(e)
+            logger.error("Not enough messages in channel to get context.")
+            logger.error(e)
             return []
         if before is False:
             before = message.created_at + datetime.timedelta(minutes=5)
@@ -425,7 +425,7 @@ class Respondtron(commands.Cog):
             context = await self.getContext(channel, before=before, after=after,
                                             max_word_count=max_word_count, ignore_list=ignore_list)
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
         return context
 
     async def saveMemory(self, _memory, shrink=True, _explain=True):
@@ -433,14 +433,14 @@ class Respondtron(commands.Cog):
             isMatch, probability = await self.botMatchString(m, _memory)
             if probability > 0.85:
                 close = m
-                logging.info(f"Not saving memory. Too close to {close}, probability {probability}")
+                logger.info(f"Not saving memory. Too close to {close}, probability {probability}")
                 return
 
         local_tz = pytz.timezone("America/New_York")
         local_timestamp = datetime.datetime.now(local_tz)
         ts = local_timestamp.strftime(GPTAPI.TIMESTAMP_FSTR)
         _memory = f"[{ts}] {_memory}"
-        logging.info(f"Saving new memory: {_memory}")
+        logger.info(f"Saving new memory: {_memory}")
         self.memory.append(_memory.lower())
         if shrink:
             self.memory = GPTAPI.shrinkMemories(self.memory, explain=_explain)
@@ -450,14 +450,14 @@ class Respondtron(commands.Cog):
     async def storeMemory(self, conversation_log):
         _memory = GPTAPI.rememberGPT(self.bot, conversation_log, self.memory)
         if _memory != "" and _memory is not None:
-            logging.info(f"Storing memory `{_memory}")
+            logger.info(f"Storing memory `{_memory}")
             await self.saveMemory(_memory)
         else:
-            logging.info(f"Storing no memories from conversation of length {len(conversation_log)}")
+            logger.info(f"Storing no memories from conversation of length {len(conversation_log)}")
 
     async def setMood(self, conversation_log):
         self.mood = GPTAPI.getMood(self, conversation_log, self.memory)
-        logging.info(f"Setting mood from convo to {self.mood}")
+        logger.info(f"Setting mood from convo to {self.mood}")
 
     async def parseGPTResponse(self, bot_response: BotResponse):
         return bot_response.response_str if bot_response.response_str else ""
@@ -474,7 +474,7 @@ class Respondtron(commands.Cog):
                                                                 self.currentConversations[message.channel.id],
                                                                 memory=_memory, mood=_mood)
         if bot_response.response_str:
-            logging.info(f"Response: {bot_response.response_str}")
+            logger.info(f"Response: {bot_response.response_str}")
             msg = await message.channel.send(bot_response.response_str)
             self.currentConversations[message.channel.id].bot_messageid_response[msg.id] = bot_response.full_response
         if bot_response.new_memory:
@@ -487,7 +487,7 @@ class Respondtron(commands.Cog):
             self.mood = bot_response.new_mood
 
     async def replyToMessage(self, message):
-        logging.info("Responding")
+        logger.info("Responding")
         if message.channel.id not in self.currentConversations or not self.currentConversations[message.channel.id]:
             self.currentConversations[message.channel.id] = Conversation(message.guild, timestamp=datetime.datetime.now())
         # get trigger
@@ -515,7 +515,7 @@ class Respondtron(commands.Cog):
                 matches.append((lineEntries, matchArgs[1]))  # save the chopped up line and the match probability
 
         response = ""
-        logging.info(f"Matches: {matches}")
+        logger.info(f"Matches: {matches}")
         # if there are any matches, choose the one with the highest probability
         if len(matches) > 0:
             highestMatch = matches[0]
@@ -527,7 +527,7 @@ class Respondtron(commands.Cog):
             # get random response from list
             responses = highestMatch[0][1:]
             response = random.choice(responses)
-            logging.info("Response: " + response)
+            logger.info("Response: " + response)
             await message.channel.send(response)
         else:
             async with message.channel.typing():
@@ -538,7 +538,7 @@ class Respondtron(commands.Cog):
         args = StringMatchHelp.fuzzyMatchString(str1, str2, self.settings[ARGS.WEIGHTS], self.settings[ARGS.PROB_MIN])
         self.lastScores = args[2]
         if args[3] is not None:
-            logging.info(args[2])
+            logger.info(args[2])
         return args[0:2]
 
 

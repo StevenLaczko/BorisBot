@@ -2,18 +2,15 @@ import enum
 from typing import Union
 
 import discord
-from dotenv import load_dotenv
-import logging
-import os
 import openai
 import pytz, datetime
 
 from src.helpers import DiscordBot
 from src.helpers.BotResponse import BotResponse
 from src.helpers.Conversation import Conversation
+from src.helpers.logging_config import logger
 import json
 import os
-
 
 class Role(enum.Enum):
     USER = "user"
@@ -176,7 +173,7 @@ def getMessageStr(bot, message, writeBotName=False):
 def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[dict[str, str]]:
     result = []
     if role is None:
-        logging.debug("Assuming 'user' role for GPT message creation.")
+        logger.debug("Assuming 'user' role for GPT message creation.")
         role = Role.USER
     role = role.value
     if isinstance(_input, str):
@@ -275,7 +272,7 @@ def getMoodString(mood: str):
     result = ""
     if len(mood) != 0:
         result = f"Boris' current mood is {mood[0]}\nRespond in that manner."
-    logging.info(f"Current mood is {mood}")
+    logger.info(f"Current mood is {mood}")
     return result
 
 def getChannelString(channel: discord.TextChannel):
@@ -304,11 +301,11 @@ async def getCommands(bot, message, response_str, message_context_list: list[dis
         if l.startswith(REMEMBER_COMMAND):
             new_memory = l[len(REMEMBER_COMMAND):]
             await message.add_reaction('🤔')
-            logging.info(f"Remembering: {new_memory}")
+            logger.info(f"Remembering: {new_memory}")
         elif l.startswith(MOOD_COMMAND):
             new_mood = l[len(MOOD_COMMAND):]
             await message.add_reaction('☝')
-            logging.info(f"Mood set to: {new_mood}")
+            logger.info(f"Mood set to: {new_mood}")
         elif len(l) > 0:
             r = l
             if l.startswith("You:"):
@@ -330,11 +327,11 @@ async def parseGPTResponse(full_response_str) -> BotResponse:
         if l.startswith(REMEMBER_COMMAND):
             new_memory = l[len(REMEMBER_COMMAND):]
             ##await message.add_reaction('🤔')
-            logging.info(f"Remembering: {new_memory}")
+            logger.info(f"Remembering: {new_memory}")
         elif l.startswith(MOOD_COMMAND):
             new_mood = l[len(MOOD_COMMAND):]
             # await message.add_reaction('☝')
-            # logging.info(f"Mood set to: {new_mood}")
+            # logger.info(f"Mood set to: {new_mood}")
         elif l.startswith(RESPOND_COMMAND):
             r = l[len(RESPOND_COMMAND):].strip()
             if r.startswith("You:"):
@@ -378,9 +375,9 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
                                 getMessageStr(bot, message)
                                 )
 
-    logging.info(f"Getting GPT response for '{message.clean_content}'")
+    logger.info(f"Getting GPT response for '{message.clean_content}'")
     response_str: str = promptGPT(prompt, TEMPERATURE, FREQ_PENALTY)["string"]
-    logging.debug(f"GPT response: `{response_str}`")
+    logger.debug(f"GPT response: `{response_str}`")
 
     # todo
     # if response["reason"] == "max_tokens":
@@ -427,10 +424,10 @@ def shrinkMemories(memory, explain=False):
         for m in response.split('\n'):
             if len(m.strip()) > 0:
                 memory.append(m)
-        logging.info("Minimized memories.")
+        logger.info("Minimized memories.")
         if getMemoryWordCount(memory) > MEMORY_WORD_COUNT_MAX:
             cullMemories(memory, explain=explain)
-    logging.info(f"Result of shrinking memory: {before_char_count-getMemoryCharCount(memory)} less chars. {before_word_count-getMemoryWordCount(memory)} less words.")
+    logger.info(f"Result of shrinking memory: {before_char_count-getMemoryCharCount(memory)} less chars. {before_word_count-getMemoryWordCount(memory)} less words.")
     return memory
 
 
@@ -460,12 +457,12 @@ If you understand, type '.' once."""},
         try:
             if explain:
                 response = promptGPT(prompt)["string"]
-                logging.info(f"Cull memory response: {response}")
+                logger.info(f"Cull memory response: {response}")
                 return int(response[-2:].strip())
             else:
                 return int(promptGPT(prompt)["string"])
         except ValueError:
-            logging.error(f"Memory cull failed.")
+            logger.error(f"Memory cull failed.")
 
     success = False
     result = ""
@@ -474,7 +471,7 @@ If you understand, type '.' once."""},
         try:
             result = parse_choice(cull_preprompt, explain)
         except ValueError as e:
-            logging.error(e)
+            logger.error(e)
             if try_count < 1:
                 cull_preprompt.append({"role": "assistant", "content": result})
                 cull_preprompt.append({"role": "user", "content": "Only type a number and nothing else."})
@@ -483,7 +480,7 @@ If you understand, type '.' once."""},
         success = True
 
     if success:
-        logging.info(f"Culling memory: '{memory[result - 1]}'")
+        logger.info(f"Culling memory: '{memory[result - 1]}'")
         culled = memory.pop(result - 1)
         # TODO generate files on startup
         open(DiscordBot.getFilePath("culled_memories.json"), "w+")
@@ -497,7 +494,7 @@ If you understand, type '.' once."""},
 
         return result if success else None
     else:
-        logging.info("Not culling.")
+        logger.info("Not culling.")
 
 
 def rememberGPT(bot, message_context_list, memory=None):
@@ -533,6 +530,6 @@ def rememberGPT(bot, message_context_list, memory=None):
     memory_str: str = promptGPT(gpt_messages, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
     if memory_str == '.':
         memory_str = ""
-    logging.info(f"Memory: {memory_str}")
+    logger.info(f"Memory: {memory_str}")
 
     return memory_str
