@@ -470,11 +470,11 @@ class Respondtron(commands.Cog):
                                                                 memory=_memory, mood=_mood)
         if bot_response.new_memory:
             if ADD_COMMAND_REACTIONS:
-                message.add_reaction('🤔')
+                await message.add_reaction('🤔')
             await self.saveMemory(bot_response.new_memory)
         if bot_response.new_mood:
             if ADD_COMMAND_REACTIONS:
-                message.add_reaction('☝')
+                await message.add_reaction('☝')
             self.mood = bot_response.new_mood
         if bot_response.response_str:
             logging.info(f"Response: {bot_response.response_str}")
