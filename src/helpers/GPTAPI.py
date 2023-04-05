@@ -12,6 +12,7 @@ from src.helpers.logging_config import logger
 import json
 import os
 
+
 class Role(enum.Enum):
     USER = "user"
     ASSISTANT = "assistant"
@@ -74,7 +75,7 @@ THREE_COMMAND_FINAL_INSTRUCTIONS = [
     "NEVER type out \"Boris:\" or \"You:\", that is only for the chatlog."
 ]
 
-#{REMEMBER_COMMAND} 'puters can talk in this modern age.
+# {REMEMBER_COMMAND} 'puters can talk in this modern age.
 THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands. You can use any number of the commands per response, but only once each. To remember something or change your own Mood, use this format:
 ```example1
 {RESPOND_COMMAND} Ah that's real interestin'! I'd never have thunk.
@@ -136,10 +137,6 @@ FREQ_PENALTY = 2
 REMEMBER_TEMPERATURE = 0
 REMEMBER_FREQ_PENALTY = 0
 MEMORY_WORD_COUNT_MAX = 300
-with open(DiscordBot.getFilePath("settings.json")) as f:
-    settings = json.load(f)
-    settings = settings["id_name_dict"]
-
 
 
 def promptGPT(gptMessages, temperature=TEMPERATURE, frequency_penalty=FREQ_PENALTY):
@@ -154,13 +151,20 @@ def promptGPT(gptMessages, temperature=TEMPERATURE, frequency_penalty=FREQ_PENAL
     return {"string": response["choices"][0]["message"]["content"].strip(), "object": response}
 
 
-def getMessageStr(bot, message, writeBotName=False):
+def getUserNameAndNick(user: discord.User, id_name_dict) -> (Union[None, str], str):
+    try:
+        name = id_name_dict[str(user.id)]
+    except KeyError:
+        return None, user.name
+    return name, user.name
+
+
+def getMessageStr(bot, message, id_name_dict, writeBotName=False):
     local_tz = pytz.timezone("America/New_York")
     local_timestamp = message.created_at.astimezone(local_tz)
     local_timestamp.strftime(TIMESTAMP_FSTR)
     if writeBotName or bot.user.id != message.author.id:
-        name = settings["id_name_dict"][str(message.author.id)] if str(message.author.id) in settings["id_name_dict"] else None
-        nick_str = message.author.name
+        name, nick_str = getUserNameAndNick(message.author, id_name_dict)
         # if bot.user.id == message.author.id:
         #     result = f"You: {message.clean_content}"
         # else:
@@ -193,7 +197,7 @@ def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[
     return result
 
 
-def getContextGPTMix(bot, messages: list[discord.Message], conversation: Conversation) -> list:
+def getContextGPTMix(bot, messages: list[discord.Message], conversation: Conversation, id_name_dict) -> list:
     result = []
     log_str = ""
 
@@ -205,7 +209,7 @@ def getContextGPTMix(bot, messages: list[discord.Message], conversation: Convers
             log_str = ""
             result.append(createGPTMessage(response_log[m.id], Role.ASSISTANT))
         else:
-            log_str += getMessageStr(bot, m, writeBotName=True) + '\n'
+            log_str += getMessageStr(bot, m, id_name_dict, writeBotName=True) + '\n'
 
     if len(log_str) != 0:
         result.append(log_str)
@@ -213,17 +217,17 @@ def getContextGPTMix(bot, messages: list[discord.Message], conversation: Convers
     return result
 
 
-def getContextGPTPlainMessages(bot, messages: list[discord.Message]) -> str:
+def getContextGPTPlainMessages(bot, messages: list[discord.Message], id_name_dict) -> str:
     result_str = "```Chatlog\n"
 
     for m in messages:
-        result_str += getMessageStr(bot, m, writeBotName=True) + '\n'
+        result_str += getMessageStr(bot, m, id_name_dict, writeBotName=True) + '\n'
 
     result_str += "```"
     return result_str
 
 
-def getContextGPTChatlog(bot, messages: list[discord.Message]):
+def getContextGPTChatlog(bot, messages: list[discord.Message], id_name_dict):
     result: list[dict] = []
     log_str = ""
 
@@ -241,7 +245,7 @@ def getContextGPTChatlog(bot, messages: list[discord.Message]):
             appendBotStr(m)
 
         else:
-            log_str += getMessageStr(bot, m) + '\n'
+            log_str += getMessageStr(bot, m, id_name_dict) + '\n'
 
     if log_str != "":
         appendLogStr(log_str)
@@ -277,15 +281,22 @@ def getMoodString(mood: str):
     logger.info(f"Current mood is {mood}")
     return result
 
-def getChannelString(channel: discord.TextChannel):
-    return f"You are talking in the {channel.name} channel."
+
+def getMessageableString(messageable: discord.abc.Messageable, id_name_dict):
+    if isinstance(messageable, discord.TextChannel):
+        return f"You are talking in the {messageable.name} channel."
+    elif isinstance(messageable, discord.DMChannel):
+        if messageable.recipient:
+            return f"You are talking privately with {getUserNameAndNick(messageable.recipient, id_name_dict)}"
+        else:
+            return "You are talking privately with someone."
 
 
 def getCurrentTimeString():
     return f"Current date/time: {datetime.datetime.now().strftime(DATETIME_FSTRING)}"
 
 
-async def getCommands(bot, message, response_str, message_context_list: list[discord.Message], memory: list[str]):
+async def getCommands(bot, message, response_str, message_context_list: list[discord.Message], memory: list[str], id_name_dict):
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
     last_response = createGPTMessage(response_str, Role.ASSISTANT)
@@ -295,7 +306,7 @@ async def getCommands(bot, message, response_str, message_context_list: list[dis
                                 getMemoryString(memory),
                                 # STANDALONE_COMMAND_INSTRUCTIONS,
                                 CONFIRM_UNDERSTANDING,
-                                getContextGPTPlainMessages(bot, message_context_list))
+                                getContextGPTPlainMessages(bot, message_context_list, id_name_dict))
     response = promptGPT(prompt)["string"]
     response_split = response.split('\n')
     new_mood = new_memory = None
@@ -350,10 +361,10 @@ async def parseGPTResponse(full_response_str) -> BotResponse:
 async def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message],
                          use_plaintext: bool,
                          conversation: Conversation,
+                         id_name_dict: dict,
                          memory: list[str] = None,
                          mood: str = "") -> BotResponse:
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
-    openai.api_key = os.environ.get("OPENAI_API_KEY")
 
     system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
     chatlog = ""
@@ -362,19 +373,20 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
     # else:
     #     chatlog = getContextGPTChatlog(bot, message_context_list)
 
-    context = getContextGPTMix(bot, message_context_list, conversation)
+    context = getContextGPTMix(bot, message_context_list, conversation, id_name_dict)
+    channel_str = getMessageableString(message.channel, id_name_dict) if id_name_dict else ""
     prompt = buildGPTMessageLog(system,
                                 CHARACTER_PROMPT,
                                 getMemoryString(memory),
                                 getCurrentTimeString() + '\n'
                                 + getMoodString(mood) + '\n'
-                                + getChannelString(message.channel),
+                                + channel_str,
                                 THREE_COMMAND_INSTRUCTIONS,
                                 COMMAND3_RESPONSE_EXAMPLE,
                                 THREE_COMMAND_FINAL_INSTRUCTIONS,
                                 CONFIRM_UNDERSTANDING,
                                 *context,
-                                getMessageStr(bot, message)
+                                getMessageStr(bot, message, id_name_dict)
                                 )
 
     logger.info(f"Getting GPT response for '{message.clean_content}'")
@@ -389,8 +401,8 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
     return response
 
 
-def getMood(bot, message_context_list, memory) -> (str, str):
-    chatlog = getContextGPTPlainMessages(bot, message_context_list)
+def getMood(bot, message_context_list, memory, id_name_dict) -> (str, str):
+    chatlog = getContextGPTPlainMessages(bot, message_context_list, id_name_dict)
     prompt = buildGPTMessageLog(getMemoryString(memory),
                                 chatlog,
                                 MOOD_PREPROMPT,
@@ -406,20 +418,22 @@ def getMemoryWordCount(memory):
         word_count += len(m.split())
     return word_count
 
+
 def getMemoryCharCount(memory):
     char_count = 0
     for m in memory:
         char_count += len(m)
     return char_count
 
-def shrinkMemories(memory, explain=False):
+
+def shrinkMemories(memory, max_memory_words, explain=False):
     memory_str = '\n'.join(memory)
     memory_message = createGPTMessage(memory_str, Role.USER)
     prompt = buildGPTMessageLog(memory_message, MEMORY_SHRINK_PROMPT, CONFIRM_UNDERSTANDING)
 
     before_word_count = getMemoryWordCount(memory)
     before_char_count = getMemoryCharCount(memory)
-    if before_word_count > settings["max_memory_words"] / 2:
+    if before_word_count > max_memory_words / 2:
         response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
         memory = []
@@ -427,9 +441,10 @@ def shrinkMemories(memory, explain=False):
             if len(m.strip()) > 0:
                 memory.append(m)
         logger.info("Minimized memories.")
-        if getMemoryWordCount(memory) > settings["max_memory_words"]:
+        if getMemoryWordCount(memory) > max_memory_words:
             cullMemories(memory, explain=explain)
-    logger.info(f"Result of shrinking memory: {before_char_count-getMemoryCharCount(memory)} less chars. {before_word_count-getMemoryWordCount(memory)} less words.")
+    logger.info(
+        f"Result of shrinking memory: {before_char_count - getMemoryCharCount(memory)} less chars. {before_word_count - getMemoryWordCount(memory)} less words.")
     return memory
 
 
@@ -499,7 +514,7 @@ If you understand, type '.' once."""},
         logger.info("Not culling.")
 
 
-def rememberGPT(bot, message_context_list, memory=None):
+def rememberGPT(bot, message_context_list, id_name_dict, memory=None):
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
@@ -523,7 +538,7 @@ def rememberGPT(bot, message_context_list, memory=None):
     if len(message_context_list) == 0:
         return None
     gpt_messages = remember_preprompt
-    context = getContextGPTPlainMessages(bot, message_context_list)
+    context = getContextGPTPlainMessages(bot, message_context_list, id_name_dict)
     if context != "":
         gpt_messages.append({"role": "user", "content": context})
     else:

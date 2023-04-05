@@ -77,7 +77,8 @@ class Respondtron(commands.Cog):
         self.currentConversations: dict[int, Conversation] = {}
         self.memory: list[str] = []
         self.mood: str = ""  # mood
-        self.max_context_words = self.max_convo_words = self.ignore_list = self.id_name_dict = None
+        self.max_context_words \
+            = self.max_convo_words = self.ignore_list = self.id_name_dict = self.max_memory_words = None
         self.loadSettings()
 
         # load memories
@@ -145,9 +146,9 @@ class Respondtron(commands.Cog):
                 continue
             dt = CONVO_END_DELAY
             if self.currentConversations[c].timestamp + dt < now:
-                channel = self.currentConversations[c].guild.get_channel(c)
+                channel = self.currentConversations[c].channel
                 if not channel:
-                    logger.error(f"Channel from id {c} is None")
+                    logger.error(f"Conversation does not have channel attribute")
                 else:
                     await self.stopConversation(channel)
 
@@ -170,6 +171,9 @@ class Respondtron(commands.Cog):
         mention_ids = [m.id for m in message.mentions]
         if "boris stop" in message.clean_content.lower():
             await self.stopConversation(message.channel)
+        elif isinstance(message.channel, discord.DMChannel):
+            logger.info("Received message in DM")
+            await self.replyToMessage(message)
         elif botID in mention_ids:
             logger.warning(self.bot.user.name + " mention DETECTED")
             message.activity = {"party_id": "Hi there :)\nsup"}
@@ -218,13 +222,13 @@ class Respondtron(commands.Cog):
     @commands.command(name="setProb", help="Usage: ~setProb [0.0-1.0]\nSets the sensitivity for matching triggers.",
                       hidden=True)
     async def setProbCommand(self, ctx, prob):
-        if ctx.guild.get_role(ADMIN_ROLE_ID) in ctx.message.author.roles:
+        if ctx.channel.get_role(ADMIN_ROLE_ID) in ctx.message.author.roles:
             await self.setProb(prob)
             return
 
     @commands.command(name="setWeights", hidden=True)
     async def setWeightCommand(self, ctx, *weights):
-        if ctx.guild.get_role(ADMIN_ROLE_ID) in ctx.message.author.roles:
+        if ctx.channel.get_role(ADMIN_ROLE_ID) in ctx.message.author.roles:
             # convert weights to floats
             floatWeights = []
             for i in range(len(weights)):
@@ -242,7 +246,7 @@ class Respondtron(commands.Cog):
 
     @commands.command(name="saveSettings", hidden=True)
     async def saveSettingsCommand(self, ctx):
-        if ctx.guild.get_role(ADMIN_ROLE_ID) in ctx.message.author.roles:
+        if ctx.channel.get_role(ADMIN_ROLE_ID) in ctx.message.author.roles:
             self.saveSettings(self.learned_reply_settings, SETTINGS_FILE)
             await ctx.send("Setting's saved. Turnin' the heat up. Keepin' em nice and cozy.")
             return
@@ -275,7 +279,7 @@ class Respondtron(commands.Cog):
     @commands.command(name="remember", help="Remember.")
     @commands.is_owner()
     async def remember(self, ctx):
-        await self.storeMemory(await self.getConvoContext(ctx.channel, after=None, ignore_list=IGNORE_LIST))
+        await self.storeMemory(await self.getConvoContext(ctx.channel, after=None, ignore_list=self.ignore_list))
 
     # METHODS
 
@@ -460,12 +464,12 @@ class Respondtron(commands.Cog):
         logger.info(f"Saving new memory: {_memory}")
         self.memory.append(_memory.lower())
         if shrink:
-            self.memory = GPTAPI.shrinkMemories(self.memory, explain=_explain)
+            self.memory = GPTAPI.shrinkMemories(self.memory, self.max_memory_words, explain=_explain)
         with open(self.memoryFilePath, 'w+') as memoryFile:
             memoryFile.write(json.dumps(self.memory))
 
     async def storeMemory(self, conversation_log):
-        _memory = GPTAPI.rememberGPT(self.bot, conversation_log, self.memory)
+        _memory = GPTAPI.rememberGPT(self.bot, conversation_log, self.memory, self.id_name_dict)
         if _memory != "" and _memory is not None:
             logger.info(f"Storing memory `{_memory}")
             await self.saveMemory(_memory)
@@ -473,7 +477,7 @@ class Respondtron(commands.Cog):
             logger.info(f"Storing no memories from conversation of length {len(conversation_log)}")
 
     async def setMood(self, conversation_log):
-        self.mood = GPTAPI.getMood(self, conversation_log, self.memory)
+        self.mood = GPTAPI.getMood(self, conversation_log, self.memory, self.id_name_dict)
         logger.info(f"Setting mood from convo to {self.mood}")
 
     async def parseGPTResponse(self, bot_response: BotResponse):
@@ -489,6 +493,7 @@ class Respondtron(commands.Cog):
         context = await self.getContext(message.channel, message, max_word_count=max_word_count)
         bot_response: BotResponse = await GPTAPI.getGPTResponse(self.bot, message, context, True,
                                                                 self.currentConversations[message.channel.id],
+                                                                self.id_name_dict,
                                                                 memory=_memory, mood=_mood)
         if bot_response.response_str:
             logger.info(f"Response: {bot_response.response_str}")
@@ -503,10 +508,10 @@ class Respondtron(commands.Cog):
                 await message.add_reaction('☝')
             self.mood = bot_response.new_mood
 
-    async def replyToMessage(self, message):
+    async def replyToMessage(self, message: discord.Message):
         logger.info("Responding")
         if message.channel.id not in self.currentConversations or not self.currentConversations[message.channel.id]:
-            self.currentConversations[message.channel.id] = Conversation(message.guild, timestamp=datetime.datetime.now())
+            self.currentConversations[message.channel.id] = Conversation(message.channel, timestamp=datetime.datetime.now())
         # get trigger
         message_string = message.clean_content.strip()
         triggerList = message_string.split()[1:]
