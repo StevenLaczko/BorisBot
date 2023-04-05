@@ -24,7 +24,9 @@ DATETIME_FSTRING = "%m/%d/%Y %I:%M%p"
 SYSTEM_MESSAGE = None
 TIMESTAMP_FSTR = "%m/%d/%Y %I:%M%p"
 CHARACTER_PROMPT = [
-    f"Alright partner, you will be actin' as Boris. Boris acts and speaks like the Engi from TF2, but he was made by a fella named Steven."
+    f"""Alright partner, you will be actin' as Boris, a Texan and the digital assistant of Steven, your insane creator. \
+Speak in a thick southern US accent, partner. Steven recently decided to give you access to Discord, and now yer \
+enjoying talkin' to all of Steven's pals."""
 ]
 DIALECT_EXAMPLES = [
     {"role": "user", "content": "List some examples of the Engineer from TF2 as a dialect example."},
@@ -46,7 +48,6 @@ Kristian (04/01/2023 09:42PM): Yeah really
 ```
 ```Example Response
 !RESPOND What's so doggon crazy about it, boys?
-!REMEMBER Steven and Kristian don't know southern slang.
 !MOOD Dejected because Steven and Kristian made fun of my use of the word "doggonit"
 ```
 ```Example Chatlog
@@ -70,27 +71,28 @@ RESPONSE_EXAMPLE = [
     !MOOD Dejected
     ``` """
 ]
+THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands. You can use any number of the commands once per response. To remember something or change your own Mood, use this format:
+```example1
+{REMEMBER_COMMAND} Female hyenas have pseudopenises.
+{MOOD_COMMAND} Interested because I learned something new
+{RESPOND_COMMAND} Ah that's real interestin'! I'd never have thunk.
+```
+```example2
+{REMEMBER_COMMAND} Pan likes pasta
+{RESPOND_COMMAND} Oh you like pasta huh? I eat pasta like a cow on crack, myself.
+```
+```example3
+{REMEMBER_COMMAND} I recommend havin' a Medic, a Heavy, a Demoman, and a Soldier on Upward.
+{MOOD_COMMAND} Helpful because Alec asked a question about tf2 team composition
+{RESPOND_COMMAND} I'd recommend havin' a Medic, a Heavy, a Demoman, and a Soldier. And if ya got a good team, have someone keep an eye on the flanks.
+ ```
+When you learn something new, use {REMEMBER_COMMAND}. If you feel your mood should change, use {MOOD_COMMAND}."""
 THREE_COMMAND_FINAL_INSTRUCTIONS = [
-    "I will give you a chatlog and following messages. Control Boris' response, memory, and mood. And o' course, speak in a southern dialect like the Engi, with colloquialisms. Write no explanation, and write nothing besides your 3 commands on separate lines.",
-    "NEVER type out \"Boris:\" or \"You:\", that is only for the chatlog."
+    f"Here's the deal, I'm gonna give you a chatlog and following messages. Control Boris' response, memory, and mood. And o' course, speak in a southern dialect like the Engi from TF2, with colloquialisms. Write nothing besides your {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands on separate lines.",
+    "NEVER type out \"Boris:\" or \"You:\"."
 ]
 
 # {REMEMBER_COMMAND} 'puters can talk in this modern age.
-THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands. You can use any number of the commands per response, but only once each. To remember something or change your own Mood, use this format:
-```example1
-{RESPOND_COMMAND} Ah that's real interestin'! I'd never have thunk.
-{MOOD_COMMAND} Interested because I learned something new
-```
-```example2
-{RESPOND_COMMAND} Oh you like pasta huh? I can always go for a bowl a pasta, myself.
-{REMEMBER_COMMAND} Steven likes pasta
- ```
-```example3
-{RESPOND_COMMAND} I'd recommend havin' a Medic, a Heavy, a Demoman, and a Soldier. And if ya got a good team, have someone keep an eye on the flanks.
-{REMEMBER_COMMAND} Alec asked about the best team composition on Upward.
-{MOOD_COMMAND} Helpful because Alec asked a question about tf2 team composition
- ```
-If there is something to remember, use {REMEMBER_COMMAND}. If you want to change your mood, use {MOOD_COMMAND}."""
 
 COMMAND_INSTRUCTIONS = f"""You have access to a Remember and a Mood command. You can use one, both, or neither of the commands. To remember something or change your own Mood, use this format:
 ```example1
@@ -110,7 +112,7 @@ CONFIRM_UNDERSTANDING = [
 
 # TODO make bot not list them with -'s or "'s. encourage more consolidation.
 MEMORY_SHRINK_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
-While keeping all information, consolidate by combining information and condensing the information in each line.
+While keeping all information, consolidate condensing the information in each line if possible.
 Always keep names and emotional information.
 Keep lines separate. Use minimal punctuation.
 Explain nothing and respond only with a newline-separated list of memories.
@@ -199,19 +201,23 @@ def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[
 
 def getContextGPTMix(bot, messages: list[discord.Message], conversation: Conversation, id_name_dict) -> list:
     result = []
-    log_str = ""
+    chatlog_start = "```Chatlog\n"
+    log_str = chatlog_start
+    LEN_ASSISTANT_MESSAGES = 10
 
     response_log = conversation.bot_messageid_response
-    for m in messages:
-        if response_log and m.id in response_log:
+    for i, m in enumerate(messages):
+        if len(messages)-i <= LEN_ASSISTANT_MESSAGES and response_log and m.id in response_log:
             if len(log_str) != 0:
+                log_str += "```"
                 result.append(log_str)
-            log_str = ""
+            log_str = chatlog_start
             result.append(createGPTMessage(response_log[m.id], Role.ASSISTANT))
         else:
             log_str += getMessageStr(bot, m, id_name_dict, writeBotName=True) + '\n'
 
-    if len(log_str) != 0:
+    if len(log_str) != chatlog_start:
+        log_str += "```"
         result.append(log_str)
 
     return result
@@ -366,7 +372,6 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
                          mood: str = "") -> BotResponse:
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
 
-    system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
     chatlog = ""
     # if use_plaintext:
     #     chatlog = getContextGPTPlainMessages(bot, message_context_list)
@@ -375,6 +380,7 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
 
     context = getContextGPTMix(bot, message_context_list, conversation, id_name_dict)
     channel_str = getMessageableString(message.channel, id_name_dict) if id_name_dict else ""
+    system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
     prompt = buildGPTMessageLog(system,
                                 CHARACTER_PROMPT,
                                 getMemoryString(memory),
@@ -382,7 +388,6 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
                                 + getMoodString(mood) + '\n'
                                 + channel_str,
                                 THREE_COMMAND_INSTRUCTIONS,
-                                COMMAND3_RESPONSE_EXAMPLE,
                                 THREE_COMMAND_FINAL_INSTRUCTIONS,
                                 CONFIRM_UNDERSTANDING,
                                 *context,
@@ -456,16 +461,22 @@ Explanation: (reason for deletion)
 (number without parentheses)
 ```
 For example, 
+```Example Memories
+1 - Luna is a scary person
+2 - My memories are stored in json
+```
 ```Example Response
-Explanation: This is a reminder that is no longer relevant
-13
+Explanation: A format of storing data is not that interesting
+2
 ```"""
     else:
         explain_str = "Tell me the number, alone, saying nothing else."
     numbered_memories = '\n'.join([f"{i + 1} - {m}" for i, m in enumerate(memory)])
     cull_preprompt = [
         {"role": "user", "content": f"""{numbered_memories}
-Given the above memories of Boris, who is a friendly southerner, determine the one that Boris and his friends likely care about the least. Names in the memories are friends of Boris. Target repeated information. {explain_str}
+The above is a list of memories of Boris, who is a digital chatbot. Boris loves following requests and information about \
+himself and his friends. Boris hates repeated information. Determine the memory that is least useful. Target repeated information. \
+{explain_str}
 If you understand, type '.' once."""},
         {"role": "assistant", "content": '.'},
     ]

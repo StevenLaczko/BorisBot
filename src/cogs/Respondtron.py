@@ -22,6 +22,7 @@ import random
 import pickle
 
 
+
 class ARGS(Enum):
     WEIGHTS = "weights"
     PROB_MIN = "probMin"
@@ -77,9 +78,6 @@ class Respondtron(commands.Cog):
         self.currentConversations: dict[int, Conversation] = {}
         self.memory: list[str] = []
         self.mood: str = ""  # mood
-        self.max_context_words \
-            = self.max_convo_words = self.ignore_list = self.id_name_dict = self.max_memory_words = None
-        self.loadSettings()
 
         # load memories
         if os.path.isfile(self.memoryFilePath):
@@ -91,17 +89,6 @@ class Respondtron(commands.Cog):
         with open(self.responseFilePath, 'r') as responses:
             with open(self.responseFilePath, 'w+') as backup:
                 backup.write(responses.read())
-
-    def loadSettings(self):
-        keys = self.bot.settings.keys()
-        if "max_context_words" not in keys:
-            self.bot.settings["max_context_words"] = MAX_CONTEXT_WORDS
-        if "max_convo_words" not in keys:
-            self.bot.settings["max_convo_words"] = MAX_CONVO_WORDS
-        for k in keys:
-            self.__setattr__(str(k), self.bot.settings[k])
-
-
 
     # SETTERS
 
@@ -193,7 +180,12 @@ class Respondtron(commands.Cog):
             await self.replyToMessage(message)
 
     async def stopConversation(self, channel):
-        logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
+        if channel.type is discord.ChannelType.private:
+            logger.info(f"{CONVO_END_DELAY} passed. Ending convo in DM with {channel.recipient if channel.recipient else 'unknown user'}")
+        else:
+            logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
+
+
         self.currentConversations[channel.id] = None
         if MEMORY_CHANCE > random.random():
             context = await self.getConvoContext(channel, after=None, ignore_list=self.bot.settings["ignore_list"])
@@ -279,7 +271,7 @@ class Respondtron(commands.Cog):
     @commands.command(name="remember", help="Remember.")
     @commands.is_owner()
     async def remember(self, ctx):
-        await self.storeMemory(await self.getConvoContext(ctx.channel, after=None, ignore_list=self.ignore_list))
+        await self.storeMemory(await self.getConvoContext(ctx.channel, after=None, ignore_list=self.ignore_list), self.bot.settings["id_name_dict"])
 
     # METHODS
 
@@ -394,9 +386,11 @@ class Respondtron(commands.Cog):
         pass
 
     async def getContext(self, channel, before, after=False, num_messages_requested=None,
-                         max_word_count=None, ignore_list=None):
-        if not max_word_count:
-            max_word_count = self.max_context_words if self.max_context_words else MAX_CONTEXT_WORDS
+                         max_context_words=None, ignore_list=None):
+        if not max_context_words:
+            max_context_words = self.bot.settings["max_context_words"]
+            if not max_context_words:
+                max_context_words = MAX_CONTEXT_WORDS
         logger.info("Getting context")
         all_messages = []
         now = datetime.datetime.now(tz=pytz.UTC)
@@ -420,7 +414,7 @@ class Respondtron(commands.Cog):
                 before = messages[-1]
 
             all_messages.extend(messages)
-            if word_count > max_word_count or len(messages) < num_messages_requested:
+            if word_count > max_context_words or len(messages) < num_messages_requested:
                 do_repeat = False
 
         logger.info(f"Number of messages looked at: {len(all_messages)}")
@@ -430,9 +424,11 @@ class Respondtron(commands.Cog):
 
     async def getConvoContext(self, channel, before=False,
                               after: Union[discord.Message, datetime.datetime, None, bool] = False,
-                              max_word_count=None, ignore_list=None):
-        if not max_word_count:
-            max_word_count = self.max_context_words if self.max_context_words else MAX_CONTEXT_WORDS
+                              max_context_words=None, ignore_list=None):
+        if not max_context_words:
+            max_context_words = self.bot.settings["max_context_words"]
+            if not max_context_words:
+                max_context_words = MAX_CONTEXT_WORDS
         context = []
         try:
             message: discord.Message = [m async for m in channel.history(limit=2)][1]  # second to last message to start
@@ -444,7 +440,7 @@ class Respondtron(commands.Cog):
             before = message.created_at + datetime.timedelta(minutes=5)
         try:
             context = await self.getContext(channel, before=before, after=after,
-                                            max_word_count=max_word_count, ignore_list=ignore_list)
+                                            max_context_words=max_context_words, ignore_list=ignore_list)
         except Exception as e:
             logger.error(e)
         return context
@@ -464,12 +460,12 @@ class Respondtron(commands.Cog):
         logger.info(f"Saving new memory: {_memory}")
         self.memory.append(_memory.lower())
         if shrink:
-            self.memory = GPTAPI.shrinkMemories(self.memory, self.max_memory_words, explain=_explain)
+            self.memory = GPTAPI.shrinkMemories(self.memory, self.bot.settings["max_context_words"], explain=_explain)
         with open(self.memoryFilePath, 'w+') as memoryFile:
             memoryFile.write(json.dumps(self.memory))
 
     async def storeMemory(self, conversation_log):
-        _memory = GPTAPI.rememberGPT(self.bot, conversation_log, self.memory, self.id_name_dict)
+        _memory = GPTAPI.rememberGPT(self.bot, conversation_log, self.bot.settings["id_name_dict"], memory=self.memory)
         if _memory != "" and _memory is not None:
             logger.info(f"Storing memory `{_memory}")
             await self.saveMemory(_memory)
@@ -477,28 +473,31 @@ class Respondtron(commands.Cog):
             logger.info(f"Storing no memories from conversation of length {len(conversation_log)}")
 
     async def setMood(self, conversation_log):
-        self.mood = GPTAPI.getMood(self, conversation_log, self.memory, self.id_name_dict)
+        self.mood = GPTAPI.getMood(self, conversation_log, self.memory, self.bot.settings["id_name_dict"])
         logger.info(f"Setting mood from convo to {self.mood}")
 
     async def parseGPTResponse(self, bot_response: BotResponse):
         return bot_response.response_str if bot_response.response_str else ""
 
-    async def replyGPT(self, message, max_word_count=None, _memory=None, _mood=None):
-        if not max_word_count:
-            max_word_count = self.max_context_words if self.max_context_words else MAX_CONTEXT_WORDS
+    async def replyGPT(self, message, max_context_words=None, _memory=None, _mood=None):
+        if not max_context_words:
+            max_context_words = self.bot.settings["max_context_words"]
+            if not max_context_words:
+                max_context_words = MAX_CONTEXT_WORDS
         if not _memory:
             _memory = self.memory
         if not _mood:
             _mood = self.mood
-        context = await self.getContext(message.channel, message, max_word_count=max_word_count)
-        bot_response: BotResponse = await GPTAPI.getGPTResponse(self.bot, message, context, True,
-                                                                self.currentConversations[message.channel.id],
-                                                                self.id_name_dict,
-                                                                memory=_memory, mood=_mood)
-        if bot_response.response_str:
-            logger.info(f"Response: {bot_response.response_str}")
-            msg = await message.channel.send(bot_response.response_str)
-            self.currentConversations[message.channel.id].bot_messageid_response[msg.id] = bot_response.full_response
+        context = await self.getContext(message.channel, message, max_context_words=max_context_words)
+        async with message.channel.typing():
+            bot_response: BotResponse = await GPTAPI.getGPTResponse(self.bot, message, context, True,
+                                                                    self.currentConversations[message.channel.id],
+                                                                    self.bot.settings["id_name_dict"],
+                                                                    memory=_memory, mood=_mood)
+            if bot_response.response_str:
+                logger.info(f"Response: {bot_response.response_str}")
+                msg = await message.channel.send(bot_response.response_str)
+                self.currentConversations[message.channel.id].bot_messageid_response[msg.id] = bot_response.full_response
         if bot_response.new_memory:
             if ADD_COMMAND_REACTIONS:
                 await message.add_reaction('🤔')
@@ -552,8 +551,7 @@ class Respondtron(commands.Cog):
             logger.info("Response: " + response)
             await message.channel.send(response)
         else:
-            async with message.channel.typing():
-                await self.replyGPT(message)
+            await self.replyGPT(message)
             return
 
     async def botMatchString(self, str1, str2):
