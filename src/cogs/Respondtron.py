@@ -395,7 +395,7 @@ class Respondtron(commands.Cog):
         all_messages = []
         now = datetime.datetime.now(tz=pytz.UTC)
         if num_messages_requested is None:
-            num_messages_requested = self.learned_reply_settings[ARGS.CONTEXT_LEN]
+            num_messages_requested = self.bot.settings["num_messages_per_request"]
         if after is False:
             past_cutoff = now - datetime.timedelta(minutes=30)
             after = past_cutoff
@@ -462,7 +462,7 @@ class Respondtron(commands.Cog):
         if shrink:
             self.memory = GPTAPI.shrinkMemories(self.memory, self.bot.settings["max_context_words"], explain=_explain)
         with open(self.memoryFilePath, 'w+') as memoryFile:
-            memoryFile.write(json.dumps(self.memory))
+            (json.dump(self.memory, memoryFile, indent=0))
 
     async def storeMemory(self, conversation_log):
         _memory = GPTAPI.rememberGPT(self.bot, conversation_log, self.bot.settings["id_name_dict"], memory=self.memory)

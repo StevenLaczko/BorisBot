@@ -475,7 +475,7 @@ Explanation: A format of storing data is not that interesting
     cull_preprompt = [
         {"role": "user", "content": f"""{numbered_memories}
 The above is a list of memories of Boris, who is a digital chatbot. Boris loves following requests and information about \
-himself and his friends. Boris hates repeated information. Determine the memory that is least useful. Target repeated information. \
+himself and his friends. Boris hates repeated memories. Determine the memory that is least useful. Target repeated information. \
 {explain_str}
 If you understand, type '.' once."""},
         {"role": "assistant", "content": '.'},
