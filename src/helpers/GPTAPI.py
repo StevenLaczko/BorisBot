@@ -112,15 +112,30 @@ CONFIRM_UNDERSTANDING = [
 
 # TODO make bot not list them with -'s or "'s. encourage more consolidation.
 MEMORY_SHRINK_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
-Combine memories pertaining to the same thing.
-While keeping all information, consolidate by condensing the information in each line if possible.
+While keeping all information, condense the information in each line if possible.
 Always keep names and emotional information.
-Keep lines separate. Use minimal punctuation.
+Keep lines separate. 
 Explain nothing and respond only with a newline-separated list of memories.
 ```Example Response
 Boris likes pocky.
 Kristian loves to rock climb.
 Steven wants to adjust the color of Boris' hard-hat.
+```"""
+MEMORY_COMBINE_PROMPT = """Given the above memories of a chatbot named Boris, organize them. 
+If two lines have information pertaining to the same thing, combine them into one line.
+If a line has information about separate things, separate them into two lines.
+Do not lose any information. Always keep names and emotional information.
+Write your response as a list of lines separated by newlines.
+Explain nothing and respond only with a newline-separated list of memories.
+```Example Memory List
+Steven wants me to remind him to be himself.
+Kristian likes rock-climbing.
+Steven wants me to speak more casually.
+Kristian likes test-driven development and Kristian wants me to look into lego.
+```Example Response
+Steven requests: Remind him to be himself, speak more casually.
+Kristian likes: rock-climbing, test-driven development.
+Kristian wants me to look into lego.
 ```"""
 
 MOOD_PREPROMPT = "I am going to give you a list of statements. You are the AI chatbot Boris in the log. Determine what mood Boris should have after having the following conversation and give a reason."
@@ -446,12 +461,25 @@ def shrinkMemories(memory, max_memory_words, explain=False):
         for m in response.split('\n'):
             if len(m.strip()) > 0:
                 memory.append(m)
-        logger.info("Minimized memories.")
+        logger.info("Shrunk memories.")
+        if getMemoryWordCount(memory) > max_memory_words:
+            combineMemories(memory)
         if getMemoryWordCount(memory) > max_memory_words:
             cullMemories(memory, explain=explain)
     logger.info(
         f"Result of shrinking memory: {before_char_count - getMemoryCharCount(memory)} less chars. {before_word_count - getMemoryWordCount(memory)} less words.")
     return memory
+
+def combineMemories(memory):
+    memory_str = '\n'.join(memory)
+    prompt = buildGPTMessageLog(memory_str, MEMORY_COMBINE_PROMPT, CONFIRM_UNDERSTANDING)
+    response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
+
+    memory = []
+    for m in response.split('\n'):
+        if len(m.strip()) > 0:
+            memory.append(m)
+    logger.info("Combined memories.")
 
 
 def cullMemories(memory, explain=False):
