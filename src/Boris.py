@@ -51,7 +51,7 @@ class Boris(DiscordBot.DiscordBot):
     def update_settings_file(self):
         # update settings file on startup
         with open(RunBoris.SETTINGS_FILE, 'w') as f:
-            json.dump(self.settings, f)
+            json.dump(self.settings, f, indent=1)
 
     async def on_member_join(self, member):
         await self.send_message(658114649081774093, "<@!" + member.id + "> :gunworm:")

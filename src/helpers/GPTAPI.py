@@ -137,7 +137,9 @@ REMEMBER_TEMPERATURE = 0
 REMEMBER_FREQ_PENALTY = 0
 MEMORY_WORD_COUNT_MAX = 300
 with open(DiscordBot.getFilePath("settings.json")) as f:
-    id_name_dict = json.loads(f.read())["id_name_dict"]
+    settings = json.load(f)
+    settings = settings["id_name_dict"]
+
 
 
 def promptGPT(gptMessages, temperature=TEMPERATURE, frequency_penalty=FREQ_PENALTY):
@@ -157,7 +159,7 @@ def getMessageStr(bot, message, writeBotName=False):
     local_timestamp = message.created_at.astimezone(local_tz)
     local_timestamp.strftime(TIMESTAMP_FSTR)
     if writeBotName or bot.user.id != message.author.id:
-        name = id_name_dict[str(message.author.id)] if str(message.author.id) in id_name_dict else None
+        name = settings["id_name_dict"][str(message.author.id)] if str(message.author.id) in settings["id_name_dict"] else None
         nick_str = message.author.name
         # if bot.user.id == message.author.id:
         #     result = f"You: {message.clean_content}"
@@ -417,7 +419,7 @@ def shrinkMemories(memory, explain=False):
 
     before_word_count = getMemoryWordCount(memory)
     before_char_count = getMemoryCharCount(memory)
-    if before_word_count > MEMORY_WORD_COUNT_MAX / 2:
+    if before_word_count > settings["max_memory_words"] / 2:
         response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
         memory = []
@@ -425,7 +427,7 @@ def shrinkMemories(memory, explain=False):
             if len(m.strip()) > 0:
                 memory.append(m)
         logger.info("Minimized memories.")
-        if getMemoryWordCount(memory) > MEMORY_WORD_COUNT_MAX:
+        if getMemoryWordCount(memory) > settings["max_memory_words"]:
             cullMemories(memory, explain=explain)
     logger.info(f"Result of shrinking memory: {before_char_count-getMemoryCharCount(memory)} less chars. {before_word_count-getMemoryWordCount(memory)} less words.")
     return memory
