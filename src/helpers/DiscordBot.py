@@ -12,7 +12,6 @@ EXTENSIONS = [
 ]
 
 os.makedirs("logs/", exist_ok=True)
-open("logs/info.log", 'w+')
 
 class DiscordBot(commands.Bot):
     def __init__(self, bot_prefix):
