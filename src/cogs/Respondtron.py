@@ -126,6 +126,7 @@ class Respondtron(commands.Cog):
     # on_message listens for incoming messages starting with an @(botname) and then responds to them
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        conversationsToStop = []
         # consider conversations over after 3 minutes of boris not responding
         now = datetime.datetime.now()
         for c in self.currentConversations:
@@ -137,7 +138,7 @@ class Respondtron(commands.Cog):
                 if not channel:
                     logger.error(f"Conversation does not have channel attribute")
                 else:
-                    await self.stopConversation(channel)
+                    conversationsToStop.append(channel)
 
         botID = self.bot.user.id
         if message.author.id == botID:
@@ -178,6 +179,9 @@ class Respondtron(commands.Cog):
         # TODO 5% chance asks GPT if it's relevant to Boris or his memories
         elif 0.05 > random.random():
             await self.replyToMessage(message)
+
+        for c in conversationsToStop:
+            await self.stopConversation(c)
 
     async def stopConversation(self, channel):
         if channel.type is discord.ChannelType.private:
