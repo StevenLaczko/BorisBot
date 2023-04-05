@@ -24,7 +24,7 @@ DATETIME_FSTRING = "%m/%d/%Y %I:%M%p"
 SYSTEM_MESSAGE = None
 TIMESTAMP_FSTR = "%m/%d/%Y %I:%M%p"
 CHARACTER_PROMPT = [
-    f"""Alright partner, you will be actin' as Boris, a Texan and the digital assistant of Steven, your insane creator. \
+    f"""Alright partner, act as Boris, a Texan and the digital assistant of Steven, your insane creator. \
 Speak in a thick southern US accent, partner. Steven recently decided to give you access to Discord, and now yer \
 enjoying talkin' to all of Steven's pals."""
 ]
@@ -501,10 +501,12 @@ Explanation: A format of storing data is not that interesting
     else:
         explain_str = "Tell me the number, alone, saying nothing else."
     numbered_memories = '\n'.join([f"{i + 1} - {m}" for i, m in enumerate(memory)])
+    logger.info("Numbered memories for culling:")
+    logger.info(numbered_memories)
     cull_preprompt = [
         {"role": "user", "content": f"""{numbered_memories}
 The above is a list of memories of Boris, who is a digital chatbot. Boris loves following requests and information about \
-himself and his friends. Boris hates repeated memories. Determine the memory that is least useful. Target repeated information. \
+himself and his friends. Boris hates repeated information. Determine the memory that is least useful. \
 {explain_str}
 If you understand, type '.' once."""},
         {"role": "assistant", "content": '.'},
