@@ -112,7 +112,8 @@ CONFIRM_UNDERSTANDING = [
 
 # TODO make bot not list them with -'s or "'s. encourage more consolidation.
 MEMORY_SHRINK_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
-While keeping all information, consolidate condensing the information in each line if possible.
+Combine memories pertaining to the same thing.
+While keeping all information, consolidate by condensing the information in each line if possible.
 Always keep names and emotional information.
 Keep lines separate. Use minimal punctuation.
 Explain nothing and respond only with a newline-separated list of memories.
