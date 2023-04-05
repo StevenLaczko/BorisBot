@@ -2,6 +2,8 @@ import datetime
 import json
 import os
 from typing import Union
+
+import RunBoris
 from src.helpers.logging_config import logger
 
 import discord
@@ -40,7 +42,7 @@ WEIGHTS_DEF = [1.2, 0.7, 1.1, 1]
 CONTEXT_LEN_DEF = 5
 GOOD_VOTE = "good"
 BAD_VOTE = "bad"
-SETTINGS_FILE = "settings"
+SETTINGS_FILE = "learned_reply_settings"
 MAX_CONTEXT_WORDS = 100
 MAX_CONVO_WORDS = 200
 MEMORY_CHANCE = 1
@@ -49,8 +51,6 @@ ADD_COMMAND_REACTIONS = True
 RESPONSE_FILENAME = "responses.txt"
 MEMORY_FILENAME = "memories.json"
 
-with open(DiscordBot.getFilePath("settings.json")) as f:
-    IGNORE_LIST = json.loads(f.read())["ignore_list"]
 
 
 # TODO Add undo (at least to addResponse)
@@ -58,8 +58,8 @@ class Respondtron(commands.Cog):
     responseFilePath = ""
     botNoResponse = ""
     cmdErrorResponse = "I do believe you messed up the command there, son."
-    settings = {ARGS.WEIGHTS: WEIGHTS_DEF, ARGS.PROB_MIN: PROB_MIN_DEF, ARGS.DEBUG_CHANNEL_ID: None,
-                ARGS.ENABLE_AUTO_WEIGHTS: False, ARGS.CONTEXT_LEN: CONTEXT_LEN_DEF}
+    learned_reply_settings = {ARGS.WEIGHTS: WEIGHTS_DEF, ARGS.PROB_MIN: PROB_MIN_DEF, ARGS.DEBUG_CHANNEL_ID: None,
+                              ARGS.ENABLE_AUTO_WEIGHTS: False, ARGS.CONTEXT_LEN: CONTEXT_LEN_DEF}
     lastScores = ()
     lastRated = False
 
@@ -67,16 +67,18 @@ class Respondtron(commands.Cog):
     tempArgs = None
     state = STATES.NOMINAL
 
-    def __init__(self, bot, responseFile=RESPONSE_FILENAME, botNoResponse="", args=None,
+    def __init__(self, bot: DiscordBot.DiscordBot, responseFile=RESPONSE_FILENAME, botNoResponse="", args=None,
                  memoryFilename=MEMORY_FILENAME):
         self.bot = bot
         self.responseFilePath = DiscordBot.getFilePath(responseFile)
         self.memoryFilePath = DiscordBot.getFilePath(memoryFilename)
         self.botNoResponse = botNoResponse
-        self.loadSettings(args)
+        self.loadLearnedReplySettings(args)
         self.currentConversations: dict[int, Conversation] = {}
         self.memory: list[str] = []
         self.mood: str = ""  # mood
+        self.max_context_words = self.max_convo_words = self.ignore_list = self.id_name_dict = None
+        self.loadSettings()
 
         # load memories
         if os.path.isfile(self.memoryFilePath):
@@ -89,21 +91,32 @@ class Respondtron(commands.Cog):
             with open(self.responseFilePath, 'w+') as backup:
                 backup.write(responses.read())
 
+    def loadSettings(self):
+        keys = self.bot.settings.keys()
+        if "max_context_words" not in keys:
+            self.bot.settings["max_context_words"] = MAX_CONTEXT_WORDS
+        if "max_convo_words" not in keys:
+            self.bot.settings["max_convo_words"] = MAX_CONVO_WORDS
+        for k in keys:
+            self.__setattr__(str(k), self.bot.settings[k])
+
+
+
     # SETTERS
 
     def setWeights(self, weights):
-        self.settings[ARGS.WEIGHTS] = weights
+        self.learned_reply_settings[ARGS.WEIGHTS] = weights
 
     def setAutoWeights(self, isEnabled):
-        self.settings[ARGS.ENABLE_AUTO_WEIGHTS] = isEnabled
+        self.learned_reply_settings[ARGS.ENABLE_AUTO_WEIGHTS] = isEnabled
 
     def setProbMin(self, probMin):
-        self.settings[ARGS.PROB_MIN] = probMin
+        self.learned_reply_settings[ARGS.PROB_MIN] = probMin
 
     def setDebugChannel(self, id):
-        self.settings[ARGS.DEBUG_CHANNEL_ID] = id
+        self.learned_reply_settings[ARGS.DEBUG_CHANNEL_ID] = id
 
-    def loadSettings(self, args):
+    def loadLearnedReplySettings(self, args):
         if args is not None:
             for iArg in args:
                 if iArg in ARGS:
@@ -179,7 +192,7 @@ class Respondtron(commands.Cog):
         logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
         self.currentConversations[channel.id] = None
         if MEMORY_CHANCE > random.random():
-            context = await self.getConvoContext(channel, after=None, ignore_list=IGNORE_LIST)
+            context = await self.getConvoContext(channel, after=None, ignore_list=self.bot.settings["ignore_list"])
             await self.storeMemory(context)
             await self.setMood(context)
 
@@ -230,7 +243,7 @@ class Respondtron(commands.Cog):
     @commands.command(name="saveSettings", hidden=True)
     async def saveSettingsCommand(self, ctx):
         if ctx.guild.get_role(ADMIN_ROLE_ID) in ctx.message.author.roles:
-            self.saveSettings(self.settings, SETTINGS_FILE)
+            self.saveSettings(self.learned_reply_settings, SETTINGS_FILE)
             await ctx.send("Setting's saved. Turnin' the heat up. Keepin' em nice and cozy.")
             return
 
@@ -257,7 +270,7 @@ class Respondtron(commands.Cog):
 
     @commands.command(name="weights", help="Sends weights as a message", hidden=True)
     async def weightsCommand(self, ctx):
-        await ctx.send(self.settings[ARGS.WEIGHTS])
+        await ctx.send(self.learned_reply_settings[ARGS.WEIGHTS])
 
     @commands.command(name="remember", help="Remember.")
     @commands.is_owner()
@@ -274,7 +287,7 @@ class Respondtron(commands.Cog):
     # if vote was bad, decrease weight of lowest string matching factor
     def alterWeights(self, isGood):
         # find the largest string matching factor
-        weights = self.settings[ARGS.WEIGHTS]
+        weights = self.learned_reply_settings[ARGS.WEIGHTS]
         if isGood:
             largestWeight = 0
             iLargestWeight = 0
@@ -304,7 +317,7 @@ class Respondtron(commands.Cog):
             weights[iSmallestWeight] -= 0.1
             logger.info(f"To: {weights[iSmallestWeight]}")
 
-        self.settings[ARGS.WEIGHTS] = weights
+        self.learned_reply_settings[ARGS.WEIGHTS] = weights
 
     async def addResponse(self, ctx, responseFile, newTrigger, newResponse):
         triggerMatch = False
@@ -377,12 +390,14 @@ class Respondtron(commands.Cog):
         pass
 
     async def getContext(self, channel, before, after=False, num_messages_requested=None,
-                         max_word_count=MAX_CONTEXT_WORDS, ignore_list=None):
+                         max_word_count=None, ignore_list=None):
+        if not max_word_count:
+            max_word_count = self.max_context_words if self.max_context_words else MAX_CONTEXT_WORDS
         logger.info("Getting context")
         all_messages = []
         now = datetime.datetime.now(tz=pytz.UTC)
         if num_messages_requested is None:
-            num_messages_requested = self.settings[ARGS.CONTEXT_LEN]
+            num_messages_requested = self.learned_reply_settings[ARGS.CONTEXT_LEN]
         if after is False:
             past_cutoff = now - datetime.timedelta(minutes=30)
             after = past_cutoff
@@ -411,7 +426,9 @@ class Respondtron(commands.Cog):
 
     async def getConvoContext(self, channel, before=False,
                               after: Union[discord.Message, datetime.datetime, None, bool] = False,
-                              max_word_count=MAX_CONVO_WORDS, ignore_list=None):
+                              max_word_count=None, ignore_list=None):
+        if not max_word_count:
+            max_word_count = self.max_context_words if self.max_context_words else MAX_CONTEXT_WORDS
         context = []
         try:
             message: discord.Message = [m async for m in channel.history(limit=2)][1]  # second to last message to start
@@ -464,7 +481,7 @@ class Respondtron(commands.Cog):
 
     async def replyGPT(self, message, max_word_count=None, _memory=None, _mood=None):
         if not max_word_count:
-            max_word_count = MAX_CONTEXT_WORDS
+            max_word_count = self.max_context_words if self.max_context_words else MAX_CONTEXT_WORDS
         if not _memory:
             _memory = self.memory
         if not _mood:
@@ -535,7 +552,7 @@ class Respondtron(commands.Cog):
             return
 
     async def botMatchString(self, str1, str2):
-        args = StringMatchHelp.fuzzyMatchString(str1, str2, self.settings[ARGS.WEIGHTS], self.settings[ARGS.PROB_MIN])
+        args = StringMatchHelp.fuzzyMatchString(str1, str2, self.learned_reply_settings[ARGS.WEIGHTS], self.learned_reply_settings[ARGS.PROB_MIN])
         self.lastScores = args[2]
         if args[3] is not None:
             logger.info(args[2])
