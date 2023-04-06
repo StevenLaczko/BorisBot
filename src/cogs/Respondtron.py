@@ -471,7 +471,7 @@ class Respondtron(commands.Cog):
         logger.info(f"Saving new memory: {_memory}")
         self.memory.append(_memory.lower())
         if shrink:
-            self.memory = GPTAPI.shrinkMemories(self.memory, self.bot.settings["max_context_words"], explain=_explain)
+            self.memory = GPTAPI.organizeMemories(self.memory, self.bot.settings["max_context_words"], explain=_explain)
         with open(self.memoryFilePath, 'w+') as memoryFile:
             (json.dump(self.memory, memoryFile, indent=0))
 

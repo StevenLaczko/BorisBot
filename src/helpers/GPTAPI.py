@@ -123,19 +123,19 @@ Steven wants to adjust the color of Boris' hard-hat.
 ```"""
 MEMORY_COMBINE_PROMPT = """Given the above memories of a chatbot named Boris, organize them. 
 If two lines have information pertaining to the same thing, combine them into one line.
-If a line has information about separate things, separate them into two lines.
+If a line has unrelated memories, separate them into two lines.
 Do not lose any information. Always keep names and emotional information.
 Write your response as a list of lines separated by newlines.
 Explain nothing and respond only with a newline-separated list of memories.
 ```Example Memory List
-Steven wants me to remind him to be himself.
-Kristian likes rock-climbing.
+Steven requests: remind him to be himself.
+Kristian: likes rock-climbing.
 Steven wants me to speak more casually.
-Kristian likes test-driven development and Kristian wants me to look into lego.
+Kristian: likes test-driven development, wants me to look into lego.
 ```Example Response
 Steven requests: Remind him to be himself, speak more casually.
 Kristian likes: rock-climbing, test-driven development.
-Kristian wants me to look into lego.
+Kristian: wants me to look into lego.
 ```"""
 
 MOOD_PREPROMPT = "I am going to give you a list of statements. You are the AI chatbot Boris in the log. Determine what mood Boris should have after having the following conversation and give a reason."
@@ -157,9 +157,9 @@ REMEMBER_FREQ_PENALTY = 0
 MEMORY_WORD_COUNT_MAX = 300
 
 
-def promptGPT(gptMessages, temperature=TEMPERATURE, frequency_penalty=FREQ_PENALTY):
+def promptGPT(gptMessages, temperature=TEMPERATURE, frequency_penalty=FREQ_PENALTY, model="gpt-3.5-turbo"):
     response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
+        model=model,
         messages=gptMessages,
         temperature=REMEMBER_TEMPERATURE,
         presence_penalty=REMEMBER_FREQ_PENALTY,
@@ -379,6 +379,13 @@ async def parseGPTResponse(full_response_str) -> BotResponse:
 
     return BotResponse(full_response_str, response_str, new_mood=new_mood, new_memory=new_memory)
 
+def getEmbedding(string):
+    openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
+    result = openai.Embedding.create(
+        input=string, model="text-embedding-ada-002"
+    )["data"][0]["embedding"]
+    return result
+
 
 async def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message],
                          use_plaintext: bool,
@@ -447,32 +454,34 @@ def getMemoryCharCount(memory):
     return char_count
 
 
-def shrinkMemories(memory, max_memory_words, explain=False):
-    memory_str = '\n'.join(memory)
-    memory_message = createGPTMessage(memory_str, Role.USER)
-    prompt = buildGPTMessageLog(memory_message, MEMORY_SHRINK_PROMPT, CONFIRM_UNDERSTANDING)
-
+def organizeMemories(memory, max_memory_words, explain=False):
     before_word_count = getMemoryWordCount(memory)
     before_char_count = getMemoryCharCount(memory)
+    combineMemories(memory)
     if before_word_count > max_memory_words / 2:
-        response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
-
-        memory = []
-        for m in response.split('\n'):
-            if len(m.strip()) > 0:
-                memory.append(m)
-        logger.info("Shrunk memories.")
-        if getMemoryWordCount(memory) > max_memory_words:
-            combineMemories(memory)
-        if getMemoryWordCount(memory) > max_memory_words:
-            cullMemories(memory, explain=explain)
+        minimizeMemoryWordCount(memory, max_memory_words, explain)
+    if getMemoryWordCount(memory) > max_memory_words:
+        cullMemories(memory, explain=explain)
     logger.info(
         f"Result of shrinking memory: {before_char_count - getMemoryCharCount(memory)} less chars. {before_word_count - getMemoryWordCount(memory)} less words.")
     return memory
 
+def minimizeMemoryWordCount(memory, max_memory_words, explain=False):
+    memory_str = '\n'.join(memory)
+    memory_message = createGPTMessage(memory_str, Role.USER)
+    prompt = buildGPTMessageLog(memory_message, MEMORY_SHRINK_PROMPT, CONFIRM_UNDERSTANDING)
+    response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
+
+    memory = []
+    for m in response.split('\n'):
+        if len(m.strip()) > 0:
+            memory.append(m)
+    logger.info("Shrunk memories.")
+
+
 def combineMemories(memory):
     memory_str = '\n'.join(memory)
-    prompt = buildGPTMessageLog(memory_str, MEMORY_COMBINE_PROMPT, CONFIRM_UNDERSTANDING)
+    prompt = buildGPTMessageLog(memory_str, MEMORY_COMBINE_PROMPT)
     response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
     memory = []
@@ -493,9 +502,10 @@ For example,
 ```Example Memories
 1 - Luna is a scary person
 2 - My memories are stored in json
+3 - Steven was confused when I sent something twice
 ```
 ```Example Response
-Explanation: A format of storing data is not that interesting
+Explanation: Boris confusing Steven by sending something twice will likely not come up in future conversation
 2
 ```"""
     else:
@@ -506,7 +516,8 @@ Explanation: A format of storing data is not that interesting
     cull_preprompt = [
         {"role": "user", "content": f"""{numbered_memories}
 The above is a list of memories of Boris, who is a digital chatbot. Boris loves following requests and information about \
-himself and his friends. Boris hates repeated information. Determine the memory that is least useful. \
+himself and his friends. He loves information he could use in future conversations. Boris hates repeated information. \
+Determine the memory that is least useful. \
 {explain_str}
 If you understand, type '.' once."""},
         {"role": "assistant", "content": '.'},
@@ -543,17 +554,11 @@ If you understand, type '.' once."""},
         culled = memory.pop(result - 1)
         # TODO generate files on startup
         open(DiscordBot.getFilePath("culled_memories.json"), "w+")
-        l = None
-        with open(DiscordBot.getFilePath("culled_memories.json"), 'r') as f:
-            l: list[str] = json.loads(f.read()) if f.read() != "" else []
-            l.append(culled)
-
-        with open(DiscordBot.getFilePath("culled_memories.json"), 'w') as f:
-            f.write(json.dumps(l))
-
-        return result if success else None
+        with open(DiscordBot.getFilePath("culled_memories.json"), 'a') as f:
+            f.write(culled)
     else:
         logger.info("Not culling.")
+    return result if success else None
 
 
 def rememberGPT(bot, message_context_list, id_name_dict, memory=None):
