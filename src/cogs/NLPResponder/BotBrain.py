@@ -3,47 +3,23 @@ from typing import Union
 
 import discord
 
-from src.cogs.Respondtron import StringMatchHelp, GPTAPI, Prompts
+from src.cogs.NLPResponder import Prompts, GPTAPI
+from src.cogs.NLPResponder.Context import Context
+from src.helpers import StringMatchHelp
 import logging
 
-from src.cogs.Respondtron.Conversation import Conversation
-
-
-class Context:
-    def __init__(self, name: str, memories: list[str] = None, mood: str = None, prompt_gpt_messages: list = None):
-        self.name = name
-        self.memories = memories if memories else []
-        self.mood: str = mood
-        self.currentConversations = []
-        self.promptGPTMessages: Union[list, None] = prompt_gpt_messages if prompt_gpt_messages else self.getPrompt()
-
-    def getPrompt(self):
-        self.promptGPTMessages = Prompts.premade[self.name] if self.name in Prompts.premade else None
-
-    def saveMemory(self, mem_str: str, memoryMatchProb: float, shrink, explain):
-        for m in self.memories:
-            isMatch, probability = await StringMatchHelp.fuzzyMatchString(mem_str, m, probMin=memoryMatchProb)
-            if isMatch:
-                close = m
-                logging.info(f"Not saving memory. Too close to {close}, probability {probability}")
-                return
-
-        self.memories.append(mem_str.lower())
-        if shrink:
-            self.memories = GPTAPI.shrinkMemoriesGPT(self.memories, explain=explain)
+from src.cogs.NLPResponder.Conversation import Conversation
 
 
 class BotBrain:
     def __init__(self,
-                 contexts: dict[str, Context] = None,
                  memory_match_prob=0.8,
                  contexts_file_path="data/contexts.json",
+                 memory_file_path="data/memories.json",
                  conversations=None):
-        self.contexts: dict[str, Context] = contexts if contexts else {}
-        if "main" not in self.contexts:
-            self.contexts["main"] = Context("main")
-        self.memoryMatchProb = memory_match_prob
-        self.contextsFilePath = contexts_file_path
+        self.memory_match_prob = memory_match_prob
+        self.memory_file_path = memory_file_path
+        self.contexts_file_path = contexts_file_path
         self.currentConversations: dict[int, Union[Conversation, None]] = conversations if conversations else {}
 
     def isMessageInConversation(self, message: discord.Message):
@@ -51,9 +27,9 @@ class BotBrain:
             return self.currentConversations[message.channel.id]
         return None
 
-    def getMemoriesString(self, pool):
+    def getMemoriesString(self, conversation: Conversation):
         memory_str = "```Memories\n"
-        if len(self.contexts[pool].memories) != 0:
+        if len(conversation.get_memory_str()) != 0:
             for m in self.contexts[pool].memories:
                 memory_str += m + '\n'
         else:
@@ -62,15 +38,13 @@ class BotBrain:
 
         return memory_str
 
-    def setMood(self, context: str, mood: str):
-        self.contexts[context].mood = mood
-
-    def saveMemory(self, pool: str, mem_str: str, shrink=True, explain=True):
-        if pool not in self.contexts:
-            self.contexts[pool] = Context(pool)
-        self.contexts[pool].saveMemory(mem_str, self.memoryMatchProb, shrink=shrink, explain=True)
-        with open(self.contextsFilePath, 'w+') as contextsFile:
-            contextsFile.write(json.dumps(self.contexts))
+    def saveMemory(self, mem_str: str, memoryMatchProb: float, shrink, explain):
+        for m in self.memories:
+            isMatch, probability = await StringMatchHelp.fuzzyMatchString(mem_str, m, probMin=memoryMatchProb)
+            if isMatch:
+                close = m
+                logging.info(f"Not saving memory. Too close to {close}, probability {probability}")
+                return
 
     def storeMemory(self, pool: str, bot, conversation_log):
         _memory = GPTAPI.rememberGPT(bot, conversation_log, self.contexts[pool].memories)
@@ -103,3 +77,6 @@ class BotBrain:
     def setMoodFromConvo(self, pool, conversation_log):
         self.mood = GPTAPI.getMood(self, conversation_log, self.contexts[pool].memories)
         logging.info(f"Setting mood from convo in context {pool} to {self.mood}")
+
+    def setMood(self, mood):
+        self.mood = mood

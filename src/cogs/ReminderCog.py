@@ -76,7 +76,7 @@ class ReminderCog(commands.Cog):
         m, isMessage = GetMessage(self.msgFlag, args, ctx)
         remindType = RemindType.String if isMessage else RemindType.MessageLink
         newReminder = Reminder(Message(m, ctx.message.jump_url), ctx.message.author.id,
-                               remindType, ctx.channel.id, ctx.guild.id, dateTime)
+                               remindType, ctx.channel.id, ctx.channel.id, dateTime)
         try:
             await self.AddReminder(newReminder, ctx.message)
         except RuntimeError as e:

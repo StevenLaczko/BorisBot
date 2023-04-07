@@ -43,7 +43,7 @@ class Boris(DiscordBot.DiscordBot):
 
     async def add_default_cogs(self):
         await self.add_cogs([
-            Respondtron.Respondtron(self, BOT_PREFIX, botNoResponse=RESPONDTRON_NO_RESPONSE),
+            src.cogs.NLPResponder.Respondtron(self, BOT_PREFIX, botNoResponse=RESPONDTRON_NO_RESPONSE),
             MemeGrabber.MemeGrabber(self),
             ReminderCog.ReminderCog(self, REMINDER_FILE_NAME, MESSAGE_FLAG)
         ])

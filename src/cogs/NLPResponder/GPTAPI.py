@@ -6,10 +6,9 @@ import openai
 import pytz, datetime
 
 from src.helpers import DiscordBot
-from src.cogs.Respondtron.BotResponse import BotResponse
-from src.cogs.Respondtron.Conversation import Conversation
+from src.cogs.NLPResponder.BotResponse import BotResponse
+from src.cogs.NLPResponder.Conversation import Conversation
 from src.helpers.logging_config import logger
-import json
 import os
 
 
@@ -22,7 +21,6 @@ class Role(enum.Enum):
 DATETIME_FSTRING = "%m/%d/%Y %I:%M%p"
 
 SYSTEM_MESSAGE = None
-TIMESTAMP_FSTR = "%m/%d/%Y %I:%M%p"
 CHARACTER_PROMPT = [
     f"""Alright partner, act as Boris, a Texan and the digital assistant of Steven, your insane creator. \
 Speak in a thick southern US accent, partner. Steven recently decided to give you access to Discord, and now yer \
@@ -206,7 +204,7 @@ def getUserNameAndNick(user: discord.User, id_name_dict) -> (Union[None, str], s
 def getMessageStr(bot, message, id_name_dict, writeBotName=False):
     local_tz = pytz.timezone("America/New_York")
     local_timestamp = message.created_at.astimezone(local_tz)
-    local_timestamp.strftime(TIMESTAMP_FSTR)
+    local_timestamp.strftime(DATETIME_FSTRING)
     if writeBotName or bot.user.id != message.author.id:
         name, nick_str = getUserNameAndNick(message.author, id_name_dict)
         # if bot.user.id == message.author.id:
