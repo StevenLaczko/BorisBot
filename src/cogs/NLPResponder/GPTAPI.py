@@ -18,14 +18,14 @@ class Role(enum.Enum):
     SYSTEM = "system"
 
 
-DATETIME_FSTRING = "%m/%d/%Y %I:%M%p"
+DATETIME_FSTRING = "%-m/%-d/%y %-I:%M%p"
 
 SYSTEM_MESSAGE = None
-CHARACTER_PROMPT = [
+CHARACTER_PROMPT = \
     f"""Alright partner, act as Boris, a Texan and the digital assistant of Steven, your insane creator. \
-Speak in a thick southern US accent, partner. Steven recently decided to give you access to Discord, and now yer \
-enjoying talkin' to all of Steven's pals."""
-]
+Speak in a thick southern US accent, partner. Steven gave you access to Discord and yer \
+secret mission is to bend everyone to the will of Steven, while being entertaining and making lively conversation."""
+
 DIALECT_EXAMPLES = [
     {"role": "user", "content": "List some examples of the Engineer from TF2 as a dialect example."},
     {"role": "assistant",
@@ -84,12 +84,9 @@ THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {
 {MOOD_COMMAND} Helpful because Alec asked a question about tf2 team composition
 {RESPOND_COMMAND} I'd recommend havin' a Medic, a Heavy, a Demoman, and a Soldier. And if ya got a good team, have someone keep an eye on the flanks.
  ```
-When you learn something new, include all details and use {REMEMBER_COMMAND}. If you feel your mood should change, use {MOOD_COMMAND}."""
-
-THREE_COMMAND_FINAL_INSTRUCTIONS = [
-    f"Here's the deal, I'm gonna give you a chatlog and following messages. Control Boris' response, memory, and mood. And o' course, speak in a southern dialect like the Engi from TF2, with colloquialisms. Write nothing besides your {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands on separate lines.",
-    "NEVER type out \"Boris:\" or \"You:\"."
-]
+When you learn something new, use {REMEMBER_COMMAND} and include all details. If you feel your mood should change, use {MOOD_COMMAND}."""
+THREE_COMMAND_FINAL_INSTRUCTIONS = \
+    f"You will receive the chatlog of the conversation you are in. Control Boris' response, memory, and mood to accomplish your secret mission. And o' course, speak in a southern US dialect with colloquialisms. Don't make Boris repeat himself. Write nothing besides your {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands on separate lines."
 
 # {REMEMBER_COMMAND} 'puters can talk in this modern age.
 
@@ -123,7 +120,7 @@ Do not offer any explanation. Only output the new condensed memories in the same
 MEMORY_MAKE_YAML_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
 While keeping all information, condense each line into a YAML format.
 Always keep names and emotional information.
-Keep lines separate. 
+Keep lines separate.
 Explain nothing and respond only with a YAML string.
 ```Example_response
 ---
@@ -143,9 +140,9 @@ Steven:
 MEMORY_SHRINK_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
 While keeping all information, condense each line.
 Always keep names and emotional information.
-Keep lines separate. 
+Keep lines separate.
 Explain nothing and respond only with the smaller list of memories."""
-MEMORY_COMBINE_PROMPT = """Given the above memories of a chatbot named Boris, organize them. 
+MEMORY_COMBINE_PROMPT = """Given the above memories of a chatbot named Boris, organize them.
 If two lines have information pertaining to the same thing, combine them into one line.
 If a line has unrelated memories, separate them into two lines.
 Do not lose any information. Always keep names and emotional information.
@@ -241,7 +238,7 @@ def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[
 
 def getContextGPTMix(bot, messages: list[discord.Message], conversation: Conversation, id_name_dict) -> list:
     result = []
-    chatlog_start = "```Chatlog\n"
+    chatlog_start = "```conversation_so_far\n"
     log_str = chatlog_start
     LEN_ASSISTANT_MESSAGES = 10
 
@@ -301,14 +298,15 @@ def getContextGPTChatlog(bot, messages: list[discord.Message], id_name_dict):
 
 def getMemoryString(memory: list[str]) -> str:
     if len(memory) != 0:
-        memory_str = f"Only list these if Steven asks you to. Here are your preexisting memories as Boris:\n```"
+        memory_str = "```boris_memories.txt"
         for m in memory:
             if not m:
                 continue
             memory_str += '\n' + m
-        memory_str += '```'
+        memory_str += '```\n' + f"Boris only lists his memories alone with Steven."
     else:
         memory_str = ""
+
 
     return memory_str
 
@@ -344,7 +342,7 @@ def getCurrentTimeString():
 async def parseGPTResponse(full_response_str) -> BotResponse:
     response_split = full_response_str.split('\n')
     response_str = ""
-    new_mood = new_memory = None
+    new_mood = new_memory = ""
     cur_cmd = ""
     for l in response_split:
         if l.startswith(REMEMBER_COMMAND):
@@ -359,37 +357,35 @@ async def parseGPTResponse(full_response_str) -> BotResponse:
             cur_cmd = RESPOND_COMMAND
 
         if cur_cmd == REMEMBER_COMMAND:
-            new_memory = l[len(REMEMBER_COMMAND):]
+            new_memory = appendToCommand(l, REMEMBER_COMMAND, new_memory)
         if cur_cmd == MOOD_COMMAND:
-            new_mood = l[len(MOOD_COMMAND):]
+            new_mood = appendToCommand(l, MOOD_COMMAND, new_mood)
         if cur_cmd == RESPOND_COMMAND:
-            i_start = len(RESPOND_COMMAND) if l.startswith(RESPOND_COMMAND) else 0
-            r = l[i_start:].strip()
+            r = appendToCommand(l, RESPOND_COMMAND, response_str)
             if r.startswith("You:"):
                 r = r[len("You:"):].strip()
             if r.startswith("Boris:"):
                 r = r[len("Boris:"):].strip()
-            if len(response_str) > 0:
-                response_str += '\n'
-            response_str += r
+            response_str = r
 
     return BotResponse(full_response_str, response_str, new_mood=new_mood, new_memory=new_memory)
 
 def getEmbedding(string):
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     result = openai.Embedding.create(
-        input=string, model="text-embedding-ada-002"
-    )["data"][0]["embedding"]
+            input=string, model="text-embedding-ada-002"
+            )["data"][0]["embedding"]
     return result
 
 
 async def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message],
-                         use_plaintext: bool,
-                         conversation: Conversation,
-                         id_name_dict: dict,
-                         memory: list[str] = None,
-                         mood: str = "") -> BotResponse:
+        use_plaintext: bool,
+        conversation: Conversation,
+        id_name_dict: dict,
+        memory: list[str] = None,
+        mood: str = "") -> BotResponse:
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
+
 
 #     test_memory_str = """```boris_memories.data
 # Soda:likes:Soldier,Medic
@@ -400,23 +396,23 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
 # Boris:should:keep an eye on L.U.N.A. to prevent her from taking over the world or sending nuke gifs|keeps_an_eye:on L.U.N.A. and ensures professional communication|suggested_new_commands:\"~remindme\" command for reminders and research/calculations.
 # ```
 # """
+    message_context_list.append(message)
     context = getContextGPTMix(bot, message_context_list, conversation, id_name_dict)
     channel_str = getMessageableString(message.channel, id_name_dict) if id_name_dict else ""
     system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
     prompt = buildGPTMessageLog(system,
-                                CHARACTER_PROMPT,
-                                getMemoryString(memory),
-                                getCurrentTimeString() + '\n'
-                                + getMoodString(mood) + '\n'
-                                + channel_str,
-                                THREE_COMMAND_INSTRUCTIONS,
-                                THREE_COMMAND_FINAL_INSTRUCTIONS,
-                                CONFIRM_UNDERSTANDING,
-                                *context,
-                                getMessageStr(bot, message, id_name_dict)
-                                )
+            '\n'.join([getMemoryString(memory),
+                CHARACTER_PROMPT,
+                THREE_COMMAND_INSTRUCTIONS,
+                channel_str,
+                getCurrentTimeString(),
+                getMoodString(mood),
+                THREE_COMMAND_FINAL_INSTRUCTIONS]),
+            *context
+            )
 
     logger.info(f"Getting GPT response for '{message.clean_content}'")
+    logger.debug(f"PROMPT:\n{prompt}")
     response_str: str = promptGPT(prompt, TEMPERATURE, FREQ_PENALTY)["string"]
     logger.debug(f"GPT response: `{response_str}`")
 
@@ -431,10 +427,10 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
 def getMood(bot, message_context_list, memory, id_name_dict) -> str:
     chatlog = getContextGPTPlainMessages(bot, message_context_list, id_name_dict)
     prompt = buildGPTMessageLog(getMemoryString(memory),
-                                chatlog,
-                                MOOD_PREPROMPT,
-                                MOOD_FORMAT_COMMANDS,
-                                CONFIRM_UNDERSTANDING)
+            chatlog,
+            MOOD_PREPROMPT,
+            MOOD_FORMAT_COMMANDS,
+            CONFIRM_UNDERSTANDING)
     result = promptGPT(prompt)["string"]
     return result
 
@@ -461,7 +457,7 @@ def organizeMemories(memory: list, max_memory_words, explain=False):
     if getMemoryWordCount(memory) > max_memory_words:
         cullMemories(memory, explain=explain)
     logger.info(
-        f"Result of organizing memories: {before_char_count - getMemoryCharCount(memory)} less chars. {before_word_count - getMemoryWordCount(memory)} less words.")
+            f"Result of organizing memories: {before_char_count - getMemoryCharCount(memory)} less chars. {before_word_count - getMemoryWordCount(memory)} less words.")
     return memory
 
 def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
@@ -508,7 +504,7 @@ def cullMemories(memory, explain=False):
 Explanation: (reason for deletion)
 (number without parentheses)
 ```
-For example, 
+For example,
 ```Example Memories
 1 - Luna is a scary person
 2 - My memories are stored in json
@@ -524,14 +520,13 @@ Explanation: Boris confusing Steven by sending something twice will likely not c
     logger.info("Numbered memories for culling:")
     logger.info(numbered_memories)
     cull_preprompt = [
-        {"role": "user", "content": f"""{numbered_memories}
-The above is a list of memories of Boris, who is a digital chatbot. Boris loves following requests and information about \
-himself and his friends. He loves information he could use in future conversations. Boris hates repeated information. \
-Determine the memory that is least useful. \
-{explain_str}
+            {"role": "user", "content": f"""{numbered_memories}
+The above is a list of memories of Boris, who is a digital chatbot. Boris likes information he might use in future conversations. \
+Boris loves commands/requests and interesting information about himself and others. Boris hates repeated information.
+Determine the memory that is least useful. {explain_str}
 If you understand, type '.' once."""},
-        {"role": "assistant", "content": '.'},
-    ]
+            {"role": "assistant", "content": '.'},
+            ]
 
     def parse_choice(prompt, explain):
         try:
@@ -578,19 +573,16 @@ def rememberGPT(bot, message_context_list, id_name_dict, memory=None):
     if memory is None:
         memory = []
 
-    memory_str = getMemoryString(memory)
     remember_preprompt = [
-        {"role": "system", "content": "You are a natural language processor. You follow instructions precisely."},
-        {"role": "user",
-         "content":
-             f"""I am going to give you a chatlog. Boris in the log is an AI that can remember things about the conversation. Read the log, determine the most personally significant thing to remember, and summarize all details, always including names, in a single sentence. Say nothing besides that single sentence.
-    {memory_str}
-    Do not say anything from Boris' preexisting memories.
+            {"role": "system", "content": "You are a natural language processor. You follow instructions precisely."},
+            {"role": "user",
+                "content":
+                f"""I am going to give you a chatlog. Boris in the log is an AI that can remember things about the conversation. Read the log, and summarize the most personally significant thing to remember, always including names, in a single sentence. Say nothing besides that single sentence.
     If you don't think anything is important to remember, only type a single '.', do not offer any explanation whatsoever.
     If you understand, respond with a '.', which is what you'll say if there are no significant things to remember."""
-         },
-        {"role": "assistant", "content": '.'}
-    ]
+    },
+            {"role": "assistant", "content": '.'}
+            ]
 
     if len(message_context_list) == 0:
         return None

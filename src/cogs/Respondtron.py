@@ -33,6 +33,11 @@ CONTEXT_LEN_DEF = 5
 GOOD_VOTE = "good"
 BAD_VOTE = "bad"
 SETTINGS_FILE = "learned_reply_settings"
+MAX_CONTEXT_WORDS = 100
+MAX_CONVO_WORDS = 200
+MEMORY_CHANCE = 1
+CONVO_END_DELAY = datetime.timedelta(minutes=10)
+ADD_COMMAND_REACTIONS = True
 RESPONSE_FILENAME = "responses.txt"
 
 

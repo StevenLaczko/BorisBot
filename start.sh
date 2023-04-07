@@ -1,2 +1,3 @@
 #!/bin/bash
-sudo docker-compose up -d
+docker-compose build --no-cache
+docker-compose up -d
