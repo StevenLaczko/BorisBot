@@ -1,23 +1,38 @@
+import uuid
+
+from ordered_set import OrderedSet
 from src.helpers.logging_config import logger
-from src.cogs.NLPResponder.Context import Context
 
-class ContextStack:
-    def __init__(self, context=None, contexts=None, use_main_context=True):
+
+class ContextStack(OrderedSet):
+    def __init__(self, context_dict, memory_pool, context=None, contexts=None, use_main_context=True):
+        super().__init__()
+        self.memory_pool = memory_pool
+        self.context_dict = context_dict
+
         if use_main_context:
-            self.contexts = self.default_context_stack()
+            self.use_main()
         if context and contexts:
-            logger.error("ERROR both context and context list passed into ContextStack constructor. Pick one or the other.")
+            logger.error(
+                "ERROR both context and context list passed into ContextStack constructor. Pick one or the other.")
         elif context:
-            self.contexts = [context]
+            self.add(context)
         elif contexts:
-            self.contexts = contexts
+            for c in contexts:
+                self.add(c)
 
+    def use_main(self):
+        return self.add(self.context_dict["main"])
 
-    def default_context_stack(self):
-        return Context(prompts=DEFAULT_PROMPTS, memory=MAIN_MEMORY, triggers=DEFAULT_TRIGGERS)
+    def get_memory_ids(self) -> list[uuid.UUID]:
+        ids: list[uuid.UUID] = []
+        for context in self:
+            ids.extend(context.get_memory_ids())
+        return ids
 
-    def get_memories(self):
-        pass
+    def save_memory(self, mem_id):
+        for context in self:
+            context.add_memory(mem_id)
 
     def add_memory(self, new_memory):
         pass

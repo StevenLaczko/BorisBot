@@ -3,6 +3,7 @@ import json
 import RunBoris
 from src.helpers import DiscordBot
 from src.cogs import Respondtron, MemeGrabber, ReminderCog
+from src.cogs.NLPResponder import NLPResponder
 
 BOT_PREFIX = '~'
 
@@ -18,6 +19,9 @@ RESPONDTRON_ARGS = {Respondtron.ARGS.WEIGHTS: WEIGHTS,
 # ReminderCog
 REMINDER_FILE_NAME = "reminders.pkl"
 MESSAGE_FLAG = "-m"
+
+# NLPResponder
+MEMORY_FILE_PATH = "data/memories.json"
 
 EXTENSIONS = [
     "src.BorisCommands"
@@ -43,7 +47,8 @@ class Boris(DiscordBot.DiscordBot):
 
     async def add_default_cogs(self):
         await self.add_cogs([
-            src.cogs.NLPResponder.Respondtron(self, BOT_PREFIX, botNoResponse=RESPONDTRON_NO_RESPONSE),
+            NLPResponder.NLPResponder(self, BOT_PREFIX, memory_filename=MEMORY_FILE_PATH),
+            Respondtron.Respondtron(self),
             MemeGrabber.MemeGrabber(self),
             ReminderCog.ReminderCog(self, REMINDER_FILE_NAME, MESSAGE_FLAG)
         ])

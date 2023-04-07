@@ -572,7 +572,7 @@ If you understand, type '.' once."""},
     return result if success else None
 
 
-def rememberGPT(bot, message_context_list, id_name_dict, memory=None):
+def rememberGPT(bot, message_context_list, id_name_dict):
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 

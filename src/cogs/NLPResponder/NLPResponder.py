@@ -2,7 +2,6 @@ import datetime
 import json
 import os
 import random
-from enum import Enum, auto
 from typing import Union
 
 import discord
@@ -10,36 +9,15 @@ import pytz
 from discord.ext import commands
 
 import src.cogs.NLPResponder.GPTAPI as GPTAPI
-import src.helpers.StringMatchHelp as StringMatchHelp
 from src.cogs.NLPResponder.BotBrain import BotBrain
 from src.cogs.NLPResponder.BotResponse import BotResponse
-from src.cogs.NLPResponder.Conversation import Conversation
 from src.cogs.NLPResponder.Context import Context
+from src.cogs.NLPResponder.Conversation import Conversation
 from src.helpers import DiscordBot
 from src.helpers.logging_config import logger
 
-
-class ARGS(Enum):
-    WEIGHTS = "weights"
-    PROB_MIN = "probMin"
-    DEBUG_CHANNEL_ID = "debugChannelId"
-    ENABLE_AUTO_WEIGHTS = "enableAutoWeights"
-    CONTEXT_LEN = "contextLen"
-
-
-class STATES(Enum):
-    NOMINAL = auto()
-    AWAITING_INPUT = auto()
-
-
-SPLIT_CHAR = '\t'
 ADMIN_ROLE_ID = 658116626712887316
-PROB_MIN_DEF = 0.7
-WEIGHTS_DEF = [1.2, 0.7, 1.1, 1]
 CONTEXT_LEN_DEF = 5
-GOOD_VOTE = "good"
-BAD_VOTE = "bad"
-SETTINGS_FILE = "learned_reply_settings"
 MAX_CONTEXT_WORDS = 100
 MAX_CONVO_WORDS = 200
 MEMORY_CHANCE = 1
@@ -49,19 +27,7 @@ MEMORY_FILENAME = "memories.json"
 
 
 # TODO Add undo (at least to addResponse)
-class Respondtron(commands.Cog):
-    responseFilePath = ""
-    botNoResponse = ""
-    cmdErrorResponse = "I do believe you messed up the command there, son."
-    learned_reply_settings = {ARGS.WEIGHTS: WEIGHTS_DEF, ARGS.PROB_MIN: PROB_MIN_DEF, ARGS.DEBUG_CHANNEL_ID: None,
-                              ARGS.ENABLE_AUTO_WEIGHTS: False, ARGS.CONTEXT_LEN: CONTEXT_LEN_DEF}
-    lastScores = ()
-    lastRated = False
-
-    # to prompt user when adding new response
-    tempArgs = None
-    state = STATES.NOMINAL
-
+class NLPResponder(commands.Cog):
     def __init__(self, bot: DiscordBot.DiscordBot, prefix, memory_filename=MEMORY_FILENAME):
         self.bot = bot
         self.prefix: str = prefix
@@ -111,7 +77,7 @@ class Respondtron(commands.Cog):
             await self.stopConversation(message.channel)
         elif isinstance(message.channel, discord.DMChannel):
             logger.info("Received message in DM")
-            await self.replyToMessage(message)
+            await self.replyToMessage(message, conversation)
         elif self.bot.user.id in mention_ids:
             logger.warning(self.bot.user.name + " mention DETECTED")
             await self.replyToMessage(message, conversation)
@@ -128,13 +94,13 @@ class Respondtron(commands.Cog):
         elif 0.05 > random.random():
             await self.replyToMessage(message, conversation)
 
-    async def stopConversation(self, channel):
+    async def stopConversation(self, channel, context: Context):
         logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
         self.bot_brain.currentConversations[channel.id] = None
         if MEMORY_CHANCE > random.random():
-            context = await self.getConvoContext(channel, after=None, ignore_list=self.bot.settings["ignore_list"])
-            await self.bot_brain.storeMemory("main", self.bot, context)
-            await self.bot_brain.setMood("main", GPTAPI.getMood(self.bot, context, self.bot_brain.getMemoryPool("main"),
+            chatlog_context = await self.getConvoContext(channel, after=None, ignore_list=self.bot.settings["ignore_list"])
+            await self.bot_brain.make_convo_memory(context, self.bot, chatlog_context)
+            await self.bot_brain.setMood(GPTAPI.getMood(self.bot, chatlog_context, self.bot_brain.getMemoryPool("main"),
                                                                 self.bot.settings["id_name_dict"]))
 
     # COMMANDS
@@ -262,7 +228,7 @@ class Respondtron(commands.Cog):
             if not max_context_words:
                 max_context_words = MAX_CONTEXT_WORDS
         if not _memory:
-            _memory = cstack.get_memories()
+            _memory = cstack.get_memory_ids()
         if not _mood:
             _mood = conversation.mood
         chatlog_context = await self.getContext(message.channel, message, max_context_words=max_context_words)
@@ -280,7 +246,7 @@ class Respondtron(commands.Cog):
         if bot_response.new_memory:
             if ADD_COMMAND_REACTIONS:
                 await message.add_reaction('🤔')
-            await self.bot_brain.saveMemory(cstack, bot_response.new_memory)
+            await self.bot_brain.save_memory(cstack, bot_response.new_memory)
         if bot_response.new_mood:
             if ADD_COMMAND_REACTIONS:
                 await message.add_reaction('☝')
@@ -293,11 +259,3 @@ class Respondtron(commands.Cog):
             self.bot_brain.currentConversations[message.channel.id] = Conversation(message.channel, context,
                                                                                    timestamp=datetime.datetime.now())
         await self.replyGPT(message, conversation)
-
-    async def botMatchString(self, str1, str2):
-        args = StringMatchHelp.fuzzyMatchString(str1, str2, self.learned_reply_settings[ARGS.WEIGHTS],
-                                                self.learned_reply_settings[ARGS.PROB_MIN])
-        self.lastScores = args[2]
-        if args[3] is not None:
-            logger.info(args[2])
-        return args[0:2]
