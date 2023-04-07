@@ -23,11 +23,11 @@ DATETIME_FSTRING = "%m/%d/%Y %I:%M%p"
 
 SYSTEM_MESSAGE = None
 TIMESTAMP_FSTR = "%m/%d/%Y %I:%M%p"
-CHARACTER_PROMPT = [
+CHARACTER_PROMPT = \
     f"""Alright partner, act as Boris, a Texan and the digital assistant of Steven, your insane creator. \
 Speak in a thick southern US accent, partner. Steven recently decided to give you access to Discord, and now yer \
-enjoying talkin' to all of Steven's pals."""
-]
+secret mission is to bend everyone to the will of Steven, while being entertaining and making lively conversation."""
+
 DIALECT_EXAMPLES = [
     {"role": "user", "content": "List some examples of the Engineer from TF2 as a dialect example."},
     {"role": "assistant",
@@ -87,10 +87,8 @@ THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {
 {RESPOND_COMMAND} I'd recommend havin' a Medic, a Heavy, a Demoman, and a Soldier. And if ya got a good team, have someone keep an eye on the flanks.
  ```
 When you learn something new, use {REMEMBER_COMMAND}. If you feel your mood should change, use {MOOD_COMMAND}."""
-THREE_COMMAND_FINAL_INSTRUCTIONS = [
-    f"Here's the deal, I'm gonna give you a chatlog and following messages. Control Boris' response, memory, and mood. And o' course, speak in a southern dialect like the Engi from TF2, with colloquialisms. Write nothing besides your {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands on separate lines.",
-    "NEVER type out \"Boris:\" or \"You:\"."
-]
+THREE_COMMAND_FINAL_INSTRUCTIONS = \
+    f"You will receive the chatlog of a conversation you are in. Control Boris' response, memory, and mood to accomplish your secret mission. And o' course, speak in a southern US dialect with colloquialisms. Write nothing besides your {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands on separate lines."
 
 # {REMEMBER_COMMAND} 'puters can talk in this modern age.
 
@@ -114,14 +112,14 @@ CONFIRM_UNDERSTANDING = [
 MEMORY_SHRINK_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
 While keeping all information, condense the information in each line if possible.
 Always keep names and emotional information.
-Keep lines separate. 
+Keep lines separate.
 Explain nothing and respond only with a newline-separated list of memories.
 ```Example Response
 Boris likes pocky.
 Kristian loves to rock climb.
 Steven wants to adjust the color of Boris' hard-hat.
 ```"""
-MEMORY_COMBINE_PROMPT = """Given the above memories of a chatbot named Boris, organize them. 
+MEMORY_COMBINE_PROMPT = """Given the above memories of a chatbot named Boris, organize them.
 If two lines have information pertaining to the same thing, combine them into one line.
 If a line has information about separate things, separate them into two lines.
 Do not lose any information. Always keep names and emotional information.
@@ -217,7 +215,7 @@ def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[
 
 def getContextGPTMix(bot, messages: list[discord.Message], conversation: Conversation, id_name_dict) -> list:
     result = []
-    chatlog_start = "```Chatlog\n"
+    chatlog_start = "```conversation_so_far\n"
     log_str = chatlog_start
     LEN_ASSISTANT_MESSAGES = 10
 
@@ -277,14 +275,15 @@ def getContextGPTChatlog(bot, messages: list[discord.Message], id_name_dict):
 
 def getMemoryString(memory: list[str]) -> str:
     if len(memory) != 0:
-        memory_str = f"Only list these if Steven asks you to. Here are your preexisting memories as Boris:\n```"
+        memory_str = "```boris_memories.txt"
         for m in memory:
             if not m:
                 continue
             memory_str += '\n' + m
-        memory_str += '```'
+        memory_str += '```\n' + f"Boris only lists his memories alone with Steven."
     else:
         memory_str = ""
+
 
     return memory_str
 
@@ -394,23 +393,23 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
     # else:
     #     chatlog = getContextGPTChatlog(bot, message_context_list)
 
+    message_context_list.append(message)
     context = getContextGPTMix(bot, message_context_list, conversation, id_name_dict)
     channel_str = getMessageableString(message.channel, id_name_dict) if id_name_dict else ""
     system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
     prompt = buildGPTMessageLog(system,
+                                '\n'.join([getMemoryString(memory),
                                 CHARACTER_PROMPT,
-                                getMemoryString(memory),
-                                getCurrentTimeString() + '\n'
-                                + getMoodString(mood) + '\n'
-                                + channel_str,
                                 THREE_COMMAND_INSTRUCTIONS,
-                                THREE_COMMAND_FINAL_INSTRUCTIONS,
-                                CONFIRM_UNDERSTANDING,
-                                *context,
-                                getMessageStr(bot, message, id_name_dict)
+                                channel_str,
+                                getCurrentTimeString(),
+                                getMoodString(mood),
+                                THREE_COMMAND_FINAL_INSTRUCTIONS]),
+                                *context
                                 )
 
     logger.info(f"Getting GPT response for '{message.clean_content}'")
+    logger.info(f"PROMPT:\n{prompt}")
     response_str: str = promptGPT(prompt, TEMPERATURE, FREQ_PENALTY)["string"]
     logger.debug(f"GPT response: `{response_str}`")
 
@@ -489,7 +488,7 @@ def cullMemories(memory, explain=False):
 Explanation: (reason for deletion)
 (number without parentheses)
 ```
-For example, 
+For example,
 ```Example Memories
 1 - Luna is a scary person
 2 - My memories are stored in json
@@ -563,14 +562,12 @@ def rememberGPT(bot, message_context_list, id_name_dict, memory=None):
     if memory is None:
         memory = []
 
-    memory_str = getMemoryString(memory)
     remember_preprompt = [
         {"role": "system", "content": "You are a natural language processor. You follow instructions precisely."},
         {"role": "user",
          "content":
-             f"""I am going to give you a chatlog. Boris in the log is an AI that can remember things about the conversation. Read the log, determine the most personally significant thing to remember, and summarize all details, always including names, in a single sentence. Say nothing besides that single sentence.
+             f"""I am going to give you a chatlog. Boris in the log is an AI that can remember things about the conversation. Read the log, and summarize the most personally significant thing to remember, always including names, in a single sentence. Say nothing besides that single sentence.
     {memory_str}
-    Do not say anything from Boris' preexisting memories.
     If you don't think anything is important to remember, only type a single '.', do not offer any explanation whatsoever.
     If you understand, respond with a '.', which is what you'll say if there are no significant things to remember."""
          },
