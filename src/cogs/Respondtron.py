@@ -47,7 +47,7 @@ SETTINGS_FILE = "learned_reply_settings"
 MAX_CONTEXT_WORDS = 100
 MAX_CONVO_WORDS = 200
 MEMORY_CHANCE = 1
-CONVO_END_DELAY = datetime.timedelta(minutes=3)
+CONVO_END_DELAY = datetime.timedelta(minutes=10)
 ADD_COMMAND_REACTIONS = True
 RESPONSE_FILENAME = "responses.txt"
 MEMORY_FILENAME = "memories.json"
@@ -466,7 +466,7 @@ class Respondtron(commands.Cog):
 
         local_tz = pytz.timezone("America/New_York")
         local_timestamp = datetime.datetime.now(local_tz)
-        ts = local_timestamp.strftime(GPTAPI.TIMESTAMP_FSTR)
+        ts = local_timestamp.strftime(GPTAPI.DATETIME_FSTRING)
         _memory = f"[{ts}] {_memory}"
         logger.info(f"Saving new memory: {_memory}")
         self.memory.append(_memory.lower())
@@ -514,6 +514,7 @@ class Respondtron(commands.Cog):
                 await message.add_reaction('🤔')
             await self.saveMemory(bot_response.new_memory)
         if bot_response.new_mood:
+            logger.info(f"New mood: {bot_response.new_mood}")
             if ADD_COMMAND_REACTIONS:
                 await message.add_reaction('☝')
             self.mood = bot_response.new_mood
@@ -522,6 +523,8 @@ class Respondtron(commands.Cog):
         logger.info("Responding")
         if message.channel.id not in self.currentConversations or not self.currentConversations[message.channel.id]:
             self.currentConversations[message.channel.id] = Conversation(message.channel, timestamp=datetime.datetime.now())
+        else:
+            self.currentConversations[message.channel.id].timestamp = datetime.datetime.now()
         # get trigger
         message_string = message.clean_content.strip()
         triggerList = message_string.split()[1:]
