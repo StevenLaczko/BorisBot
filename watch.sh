@@ -1,2 +1,2 @@
 #!/bin/bash
-watch "more logs/info.log | tail -n 40"
+watch "cat logs/boris.log | tail -n 40"
