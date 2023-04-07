@@ -68,9 +68,10 @@ class Respondtron(commands.Cog):
     tempArgs = None
     state = STATES.NOMINAL
 
-    def __init__(self, bot: DiscordBot.DiscordBot, responseFile=RESPONSE_FILENAME, botNoResponse="", args=None,
+    def __init__(self, bot: DiscordBot.DiscordBot, prefix, responseFile=RESPONSE_FILENAME, botNoResponse="", args=None,
                  memoryFilename=MEMORY_FILENAME):
         self.bot = bot
+        self.prefix: str = prefix
         self.responseFilePath = DiscordBot.getFilePath(responseFile)
         self.memoryFilePath = DiscordBot.getFilePath(memoryFilename)
         self.botNoResponse = botNoResponse
@@ -156,15 +157,22 @@ class Respondtron(commands.Cog):
                 await message.add_reaction('❌')
                 self.state = STATES.NOMINAL
 
+        if message.clean_content.strip()[0] != self.prefix:
+            await self.handle_response_situations(message)
+
+        for c in conversationsToStop:
+            await self.stopConversation(c)
+
+
+    async def handle_response_situations(self, message):
         mention_ids = [m.id for m in message.mentions]
         if "boris stop" in message.clean_content.lower():
             await self.stopConversation(message.channel)
         elif isinstance(message.channel, discord.DMChannel):
             logger.info("Received message in DM")
             await self.replyToMessage(message)
-        elif botID in mention_ids:
+        elif self.bot.user.id in mention_ids:
             logger.warning(self.bot.user.name + " mention DETECTED")
-            message.activity = {"party_id": "Hi there :)\nsup"}
             await self.replyToMessage(message)
         elif "boris" in message.clean_content.lower():
             logger.warning("I heard my name.")
@@ -180,24 +188,8 @@ class Respondtron(commands.Cog):
         elif 0.05 > random.random():
             await self.replyToMessage(message)
 
-        for c in conversationsToStop:
-            await self.stopConversation(c)
+    # COMMANDS
 
-    async def stopConversation(self, channel):
-        if channel.type is discord.ChannelType.private:
-            logger.info(f"{CONVO_END_DELAY} passed. Ending convo in DM with {channel.recipient if channel.recipient else 'unknown user'}")
-        else:
-            logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
-
-
-        self.currentConversations[channel.id] = None
-        if MEMORY_CHANCE > random.random():
-            context = await self.getConvoContext(channel, after=None, ignore_list=self.bot.settings["ignore_list"])
-            await self.storeMemory(context)
-            await self.setMood(context)
-
-    # teach
-    # teach allows the bot to learn new trigger/response pairs
     @commands.command(name='teach', help='Usage: ~teach \"Trigger phrase\" \"Desired response\"')
     async def teach(self, ctx, *args):
         # take in and sanitize trigger
@@ -277,7 +269,22 @@ class Respondtron(commands.Cog):
     async def remember(self, ctx):
         await self.storeMemory(await self.getConvoContext(ctx.channel, after=None, ignore_list=self.ignore_list), self.bot.settings["id_name_dict"])
 
+
+
     # METHODS
+
+    async def stopConversation(self, channel):
+        if channel.type is discord.ChannelType.private:
+            logger.info(f"{CONVO_END_DELAY} passed. Ending convo in DM with {channel.recipient if channel.recipient else 'unknown user'}")
+        else:
+            logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
+
+
+        self.currentConversations[channel.id] = None
+        if MEMORY_CHANCE > random.random():
+            context = await self.getConvoContext(channel, after=None, ignore_list=self.bot.settings["ignore_list"])
+            await self.storeMemory(context)
+            await self.setMood(context)
 
     def resetState(self):
         self.state = STATES.NOMINAL
@@ -464,7 +471,7 @@ class Respondtron(commands.Cog):
         logger.info(f"Saving new memory: {_memory}")
         self.memory.append(_memory.lower())
         if shrink:
-            self.memory = GPTAPI.shrinkMemories(self.memory, self.bot.settings["max_context_words"], explain=_explain)
+            self.memory = GPTAPI.organizeMemories(self.memory, self.bot.settings["max_context_words"], explain=_explain)
         with open(self.memoryFilePath, 'w+') as memoryFile:
             (json.dump(self.memory, memoryFile, indent=0))
 

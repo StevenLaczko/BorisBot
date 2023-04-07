@@ -1,5 +1,5 @@
 import re
-from enum import Enum
+from enum import Enum, auto
 from fuzzywuzzy import fuzz
 
 DEF_WEIGHTS = [1.2, 0.7, 1.1, 1]
@@ -7,10 +7,10 @@ DEF_PROB = 0.7
 
 
 class Output(Enum):
-    isMatch = 0
-    probability = 1
-    scores = 2
-    output = 3
+    isMatch = auto
+    probability = auto
+    scores = auto
+    output = auto
 
 
 def sanitize_string(input, regex=r'[^a-zA-Z ]'):
@@ -37,12 +37,7 @@ def fuzzyMatchString(str1, str2, weights=DEF_WEIGHTS, probMin=DEF_PROB):
 
     scores = [ratio, partialRatio, tokenSetRatio, tokenSortRatio]
 
-    # weight scores as probabilities, sum them, and divide by number of scores
-    sumScores = 0
-    for i in range(len(scores)):
-        sumScores += (scores[i] / 100) * weights[i]
-
-    probability = sumScores / len(scores)
+    probability = sum([(scores[i]/100.0)*weights[i] for i in range(len(weights))])/sum(weights)
 
     isMatch = False
     if probability > probMin:

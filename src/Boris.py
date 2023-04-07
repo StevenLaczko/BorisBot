@@ -4,7 +4,7 @@ import RunBoris
 from src.helpers import DiscordBot
 from src.cogs import Respondtron, MemeGrabber, ReminderCog
 
-BOT_PREFIX = ('<@698354966078947338>', '~', '<@!698354966078947338>', '<@&698361022712381451>')
+BOT_PREFIX = '~'
 
 WEIGHTS = [1.2, 0.7, 1.1, 1]
 PROB_MIN = 0.7
@@ -43,7 +43,7 @@ class Boris(DiscordBot.DiscordBot):
 
     async def add_default_cogs(self):
         await self.add_cogs([
-            Respondtron.Respondtron(self, botNoResponse=RESPONDTRON_NO_RESPONSE),
+            Respondtron.Respondtron(self, BOT_PREFIX, botNoResponse=RESPONDTRON_NO_RESPONSE),
             MemeGrabber.MemeGrabber(self),
             ReminderCog.ReminderCog(self, REMINDER_FILE_NAME, MESSAGE_FLAG)
         ])
