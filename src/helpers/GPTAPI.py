@@ -110,17 +110,42 @@ CONFIRM_UNDERSTANDING = [
     {"role": "assistant", "content": "."}
 ]
 
+MEMORY_SMALL_FORMAT_PROMPT = """To store information about [ENTITY], use the following format:
+KEY1:VALUE1,VALUE2,VALUE3|KEY2:VALUE4|KEY3:VALUE5,VALUE6|...
+Replace KEY1, KEY2, KEY3, etc. with relevant keys for the [ENTITY], and VALUE1, VALUE2, VALUE3, etc. with their corresponding values. Separate each key-value pair with a | character, and separate multiple values for a key with a comma.
+For example, to store information about a [PERSON] you could use the following format:
+NAME:[Name]|AGE:[Age]|HOBBIES:[Hobby1],[Hobby2],[Hobby3]|LOCATION:[Location]|...
+"""
+
+MEMORY_SMALL_FORMAT_SHRINK_PROMPT = """Given the above condensed memories of a chatbot named Boris, minimize the word count while retaining as much information as possible.
+Do not offer any explanation. Only output the new condensed memories in the same data format."""
+
 # TODO make bot not list them with -'s or "'s. encourage more consolidation.
-MEMORY_SHRINK_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
-While keeping all information, condense the information in each line if possible.
+MEMORY_MAKE_YAML_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
+While keeping all information, condense each line into a YAML format.
 Always keep names and emotional information.
 Keep lines separate. 
-Explain nothing and respond only with a newline-separated list of memories.
-```Example Response
-Boris likes pocky.
-Kristian loves to rock climb.
-Steven wants to adjust the color of Boris' hard-hat.
+Explain nothing and respond only with a YAML string.
+```Example_response
+---
+Boris:
+    likes:
+        - pocky
+Kristian:
+    likes:
+        - bouldering
+        - programming
+Steven:
+    wants:
+        - adjust color of Boris' hat
+        - kill more clones
 ```"""
+
+MEMORY_SHRINK_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
+While keeping all information, condense each line.
+Always keep names and emotional information.
+Keep lines separate. 
+Explain nothing and respond only with the smaller list of memories."""
 MEMORY_COMBINE_PROMPT = """Given the above memories of a chatbot named Boris, organize them. 
 If two lines have information pertaining to the same thing, combine them into one line.
 If a line has unrelated memories, separate them into two lines.
@@ -358,17 +383,26 @@ async def parseGPTResponse(full_response_str) -> BotResponse:
     response_split = full_response_str.split('\n')
     response_str = ""
     new_mood = new_memory = None
+    cur_cmd = ""
     for l in response_split:
         if l.startswith(REMEMBER_COMMAND):
-            new_memory = l[len(REMEMBER_COMMAND):]
+            cur_cmd = REMEMBER_COMMAND
             ##await message.add_reaction('🤔')
             logger.info(f"Remembering: {new_memory}")
         elif l.startswith(MOOD_COMMAND):
-            new_mood = l[len(MOOD_COMMAND):]
+            cur_cmd = MOOD_COMMAND
             # await message.add_reaction('☝')
             # logger.info(f"Mood set to: {new_mood}")
         elif l.startswith(RESPOND_COMMAND):
-            r = l[len(RESPOND_COMMAND):].strip()
+            cur_cmd = RESPOND_COMMAND
+
+        if cur_cmd == REMEMBER_COMMAND:
+            new_memory = l[len(REMEMBER_COMMAND):]
+        if cur_cmd == MOOD_COMMAND:
+            new_mood = l[len(MOOD_COMMAND):]
+        if cur_cmd == RESPOND_COMMAND:
+            i_start = len(RESPOND_COMMAND) if l.startswith(RESPOND_COMMAND) else 0
+            r = l[i_start:].strip()
             if r.startswith("You:"):
                 r = r[len("You:"):].strip()
             if r.startswith("Boris:"):
@@ -395,12 +429,15 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
                          mood: str = "") -> BotResponse:
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
 
-    chatlog = ""
-    # if use_plaintext:
-    #     chatlog = getContextGPTPlainMessages(bot, message_context_list)
-    # else:
-    #     chatlog = getContextGPTChatlog(bot, message_context_list)
-
+#     test_memory_str = """```boris_memories.data
+# Soda:likes:Soldier,Medic
+# Luna:description:touchy Discord friend of Steven's|likes:nukes|personality:sassy,genocidal tendencies|promised:not to incite actual trouble.
+# Steven:wants:chat casually with Boris,remember to be more casual using !remember,kill clones in basement|has:clones do tasks around house|values:not value lives of clones|confused_about:Boris' double response|favorite_clone:hippotato|making:mac and cheese with heavy cream today|warns:not respond to messages that start with '~' because it triggers double response|remindme_to_add:\"succinctly\" to prompts to encourage conversation
+# Phone_clone:status:still around
+# Compromise_clone:status:killed
+# Boris:should:keep an eye on L.U.N.A. to prevent her from taking over the world or sending nuke gifs|keeps_an_eye:on L.U.N.A. and ensures professional communication|suggested_new_commands:\"~remindme\" command for reminders and research/calculations.
+# ```
+# """
     context = getContextGPTMix(bot, message_context_list, conversation, id_name_dict)
     channel_str = getMessageableString(message.channel, id_name_dict) if id_name_dict else ""
     system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
@@ -454,22 +491,34 @@ def getMemoryCharCount(memory):
     return char_count
 
 
-def organizeMemories(memory, max_memory_words, explain=False):
+def organizeMemories(memory: list, max_memory_words, explain=False):
     before_word_count = getMemoryWordCount(memory)
     before_char_count = getMemoryCharCount(memory)
-    combineMemories(memory)
+    #combineMemories(memory)
     if before_word_count > max_memory_words / 2:
         minimizeMemoryWordCount(memory, max_memory_words, explain)
     if getMemoryWordCount(memory) > max_memory_words:
         cullMemories(memory, explain=explain)
     logger.info(
-        f"Result of shrinking memory: {before_char_count - getMemoryCharCount(memory)} less chars. {before_word_count - getMemoryWordCount(memory)} less words.")
+        f"Result of organizing memories: {before_char_count - getMemoryCharCount(memory)} less chars. {before_word_count - getMemoryWordCount(memory)} less words.")
     return memory
 
-def minimizeMemoryWordCount(memory, max_memory_words, explain=False):
+def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
     memory_str = '\n'.join(memory)
     memory_message = createGPTMessage(memory_str, Role.USER)
     prompt = buildGPTMessageLog(memory_message, MEMORY_SHRINK_PROMPT, CONFIRM_UNDERSTANDING)
+    response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
+
+    memory = []
+    for m in response.split('\n'):
+        if len(m.strip()) > 0:
+            memory.append(m)
+    logger.info("Shrunk memories.")
+
+def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
+    memory_str = '\n'.join(memory)
+    memory_message = createGPTMessage(memory_str, Role.USER)
+    prompt = buildGPTMessageLog(memory_message, MEMORY_MAKE_YAML_PROMPT, CONFIRM_UNDERSTANDING)
     response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
     memory = []
