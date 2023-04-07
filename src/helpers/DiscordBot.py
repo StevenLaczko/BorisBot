@@ -12,13 +12,13 @@ EXTENSIONS = [
 ]
 
 os.makedirs("logs/", exist_ok=True)
-open("logs/info.log", 'w+')
 
 class DiscordBot(commands.Bot):
-    def __init__(self, bot_prefix):
+    def __init__(self, bot_prefix, settings=None):
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(command_prefix=bot_prefix, intents=intents)
+        self.settings: dict = settings
 
         self.event(self.on_ready)
         self.event(self.on_error)
@@ -47,6 +47,7 @@ class DiscordBot(commands.Bot):
     async def send_message(self, channelID, message):
         channel = self.get_channel(channelID)
         await channel.send(message)
+
 
 
 def getFilePath(filename):

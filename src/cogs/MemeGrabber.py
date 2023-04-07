@@ -24,7 +24,7 @@ class MemeGrabber(commands.Cog):
 
     @commands.command(name="getMeme", help="Get a random popular meme. Prime cuts.")
     async def GetMeme(self, ctx):
-        req = requests.get('https://meme-api.herokuapp.com/gimme')
+        req = requests.get('https://meme-api.com/gimme')
         json = req.json()
         await ctx.send(json['url'])
 
@@ -37,45 +37,43 @@ class MemeGrabber(commands.Cog):
             await ctx.send("Too busy right now, friend. Sorry!")
             return
 
-        while self.loadingMeme:
-            await asyncio.sleep(1)
+        async with ctx.typing():
+            self.loadingMeme = True
 
-        self.loadingMeme = True
+            # get driver for webpage
+            options = Options()
+            options.headless = True
+            driver = webdriver.Firefox(options=options)
+            driver.get("https://imgflip.com/ai-meme")
+            assert "Meme" in driver.title
 
-        # get driver for webpage
-        options = Options()
-        options.headless = True
-        driver = webdriver.Firefox(options=options)
-        driver.get("https://imgflip.com/ai-meme")
-        assert "Meme" in driver.title
+            # wait til website loads
+            await self.WaitIfElemExists(driver, "site-loading", 1)
 
-        # wait til website loads
-        await self.WaitIfElemExists(driver, "site-loading", 1)
+            try:
+                buttons = driver.find_elements_by_css_selector(".aim-meme-btn")
+                print(buttons)
+                assert len(buttons) > 0
+                button = random.choice(buttons)
+                button.click()
+            except ValueError as err:
+                print("Error:", err)
+                await ctx.send("Error in GetAIMeme, partner. Couldn't grab them buttons.")
 
-        try:
-            buttons = driver.find_elements_by_css_selector(".aim-meme-btn")
-            print(buttons)
-            assert len(buttons) > 0
-            button = random.choice(buttons)
-            button.click()
-        except ValueError as err:
-            print("Error:", err)
-            await ctx.send("Error in GetAIMeme, partner. Couldn't grab them buttons.")
+            await self.WaitIfElemExists(driver, "site-loading", 1)
 
-        await self.WaitIfElemExists(driver, "site-loading", 1)
+            try:
+                # get screenshot of meme canvas
+                S = lambda X: driver.execute_script('return document.body.parentNode.scroll' + X)
+                driver.set_window_size(S('Width'), S('Height'))  # May need manual adjustment
+                meme_png = driver.find_element_by_css_selector('.mm-canv').screenshot_as_png
 
-        try:
-            # get screenshot of meme canvas
-            S = lambda X: driver.execute_script('return document.body.parentNode.scroll' + X)
-            driver.set_window_size(S('Width'), S('Height'))  # May need manual adjustment
-            meme_png = driver.find_element_by_css_selector('.mm-canv').screenshot_as_png
+                b = io.BytesIO(meme_png)
+                await ctx.send(file=File(b, filename="meme.png"))
 
-            b = io.BytesIO(meme_png)
-            await ctx.send(file=File(b, filename="meme.png"))
-
-        except ValueError as err:
-            print("Error:", err)
-            await ctx.send("Error in GetAIMeme... Couldn't wrestle that canvas, friend!")
+            except ValueError as err:
+                print("Error:", err)
+                await ctx.send("Error in GetAIMeme... Couldn't wrestle that canvas, friend!")
 
         self.aiMemesQueueNum -= 1
         self.loadingMeme = False

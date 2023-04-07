@@ -1,7 +1,10 @@
+import json
+
+import RunBoris
 from src.helpers import DiscordBot
 from src.cogs import Respondtron, MemeGrabber, ReminderCog
 
-BOT_PREFIX = ('<@698354966078947338>', '~', '<@!698354966078947338>', '<@&698361022712381451>')
+BOT_PREFIX = '~'
 
 WEIGHTS = [1.2, 0.7, 1.1, 1]
 PROB_MIN = 0.7
@@ -26,8 +29,8 @@ EXTENSIONS = [
 
 
 class Boris(DiscordBot.DiscordBot):
-    def __init__(self, bot_prefix=BOT_PREFIX):
-        super().__init__(bot_prefix)
+    def __init__(self, bot_prefix=BOT_PREFIX, settings=None):
+        super().__init__(bot_prefix, settings)
 
         self.event(self.on_member_join)
 
@@ -36,13 +39,19 @@ class Boris(DiscordBot.DiscordBot):
         await super().on_ready()
         await self.load_extensions(EXTENSIONS)
         await self.add_default_cogs()
+        self.update_settings_file()
 
     async def add_default_cogs(self):
         await self.add_cogs([
-            Respondtron.Respondtron(self, botNoResponse=RESPONDTRON_NO_RESPONSE),
+            Respondtron.Respondtron(self, BOT_PREFIX, botNoResponse=RESPONDTRON_NO_RESPONSE),
             MemeGrabber.MemeGrabber(self),
             ReminderCog.ReminderCog(self, REMINDER_FILE_NAME, MESSAGE_FLAG)
         ])
+
+    def update_settings_file(self):
+        # update settings file on startup
+        with open(RunBoris.SETTINGS_FILE, 'w') as f:
+            json.dump(self.settings, f, indent=1)
 
     async def on_member_join(self, member):
         await self.send_message(658114649081774093, "<@!" + member.id + "> :gunworm:")
