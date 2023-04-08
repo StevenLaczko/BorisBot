@@ -469,7 +469,7 @@ def organizeMemories(memory: list, max_memory_words, explain=False):
 def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
     memory_str = '\n'.join(memory)
     memory_message = createGPTMessage(memory_str, Role.USER)
-    prompt = buildGPTMessageLog(memory_message, MEMORY_SHRINK_PROMPT, CONFIRM_UNDERSTANDING)
+    prompt = buildGPTMessageLog(memory_message, MEMORY_SMALL_FORMAT_SHRINK_PROMPT, CONFIRM_UNDERSTANDING)
     response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
     memory = []
@@ -477,19 +477,6 @@ def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
         if len(m.strip()) > 0:
             memory.append(m)
     logger.info("Shrunk memories.")
-
-def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
-    memory_str = '\n'.join(memory)
-    memory_message = createGPTMessage(memory_str, Role.USER)
-    prompt = buildGPTMessageLog(memory_message, MEMORY_MAKE_YAML_PROMPT, CONFIRM_UNDERSTANDING)
-    response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
-
-    memory = []
-    for m in response.split('\n'):
-        if len(m.strip()) > 0:
-            memory.append(m)
-    logger.info("Shrunk memories.")
-
 
 def combineMemories(memory):
     memory_str = '\n'.join(memory)
