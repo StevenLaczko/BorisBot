@@ -25,7 +25,7 @@ SYSTEM_MESSAGE = None
 CHARACTER_PROMPT = \
     f"""Alright partner, act as Boris, a Texan and the digital assistant of Steven, your insane creator. \
 Speak in a thick southern US accent, partner. Steven gave you access to Discord and yer \
-secret mission is to bend everyone to the will of Steven, while being entertaining and making lively conversation."""
+secret mission is to bend everyone to the will of Steven, while being entertaining and keeping conversation going."""
 
 DIALECT_EXAMPLES = [
     {"role": "user", "content": "List some examples of the Engineer from TF2 as a dialect example."},
@@ -85,7 +85,7 @@ THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {
 {MOOD_COMMAND} Helpful because Alec asked a question about tf2 team composition
 {RESPOND_COMMAND} I'd recommend havin' a Medic, a Heavy, a Demoman, and a Soldier. And if ya got a good team, have someone keep an eye on the flanks.
  ```
-When you learn something new, use {REMEMBER_COMMAND}. If you feel your mood should change, use {MOOD_COMMAND}."""
+When you see anything new, use {REMEMBER_COMMAND}. If you feel your mood should change, use {MOOD_COMMAND}."""
 THREE_COMMAND_FINAL_INSTRUCTIONS = \
     f"You will receive the chatlog of the conversation you are in. Control Boris' response, memory, and mood to accomplish your secret mission. And o' course, speak in a southern US dialect with colloquialisms. Don't make Boris repeat himself. Write nothing besides your {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands on separate lines."
 
@@ -107,15 +107,34 @@ CONFIRM_UNDERSTANDING = [
     {"role": "assistant", "content": "."}
 ]
 
-MEMORY_SMALL_FORMAT_PROMPT = """To store information about [ENTITY], use the following format:
-KEY1:VALUE1,VALUE2,VALUE3|KEY2:VALUE4|KEY3:VALUE5,VALUE6|...
-Replace KEY1, KEY2, KEY3, etc. with relevant keys for the [ENTITY], and VALUE1, VALUE2, VALUE3, etc. with their corresponding values. Separate each key-value pair with a | character, and separate multiple values for a key with a comma.
-For example, to store information about a [PERSON] you could use the following format:
-NAME:[Name]|AGE:[Age]|HOBBIES:[Hobby1],[Hobby2],[Hobby3]|LOCATION:[Location]|...
+MEMORY_SMALL_FORMAT_ADD_MEM = """
+```compressed_format
+ENTITY|KEY1:VALUE1,VALUE2,VALUE3|KEY2:VALUE4|KEY3:VALUE5,VALUE6|...
+```
+Take the memory in natural language and insert all its information comprehensibly into that data structure.
+Do not offer any explanation. Output only the updated memories without a codeblock and nothing else.
 """
 
-MEMORY_SMALL_FORMAT_SHRINK_PROMPT = """Given the above condensed memories of a chatbot named Boris, minimize the word count while retaining as much information as possible.
-Do not offer any explanation. Only output the new condensed memories in the same data format."""
+MEMORY_SMALL_FORMAT_PROMPT = """Store all of the above information comprehensibly in the following key-value format:
+```format_example
+ENTITY|KEY1:VALUE1,VALUE2,VALUE3|KEY2:VALUE4|KEY3:VALUE5,VALUE6|...
+```
+```template_for_person
+NAME|AGE:[Age]|HOBBIES:[Hobby1],[Hobby2],[Hobby3]|LOCATION:[Location]|...
+```
+```example
+STEVEN|WANTS:Boris to speak more concisely,triple espresso|LOCATION:Maryland,home base
+```
+Do not offer any explanation. Only output the given memories in the specified format without a codeblock.
+"""
+
+MEMORY_SMALL_FORMAT_EXAMPLE = """```example_response
+BORIS|WANTS:Steven to like him|WORKING_ON:portal tech,remembering
+KRISTIAN|LIKES:bouldering,coding,lego x-pods
+```"""
+
+MEMORY_SMALL_FORMAT_SHRINK_PROMPT = """The above are condensed memories of a chatbot named Boris. While maintaining 100% comprehensibility, minimize the word count.
+Do not offer any explanation. Only output the new condensed memories in the exact same data format without a codeblock."""
 
 # TODO make bot not list them with -'s or "'s. encourage more consolidation.
 MEMORY_MAKE_YAML_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
@@ -495,11 +514,12 @@ def getMemoryCharCount(memory):
 def organizeMemories(memory: list, max_memory_words, explain=False):
     before_word_count = getMemoryWordCount(memory)
     before_char_count = getMemoryCharCount(memory)
-    #combineMemories(memory)
+    memory = combineMemories(memory)
+    logger.info('\n'.join(memory))
     if before_word_count > max_memory_words / 2:
-        minimizeMemoryWordCount(memory, max_memory_words, explain)
+        memory = minimizeMemoryWordCount(memory, max_memory_words, explain)
     if getMemoryWordCount(memory) > max_memory_words:
-        cullMemories(memory, explain=explain)
+        memory = cullMemories(memory, explain=explain)
     logger.info(
             f"Result of organizing memories: {before_char_count - getMemoryCharCount(memory)} less chars. {before_word_count - getMemoryWordCount(memory)} less words.")
     return memory
@@ -507,7 +527,7 @@ def organizeMemories(memory: list, max_memory_words, explain=False):
 def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
     memory_str = '\n'.join(memory)
     memory_message = createGPTMessage(memory_str, Role.USER)
-    prompt = buildGPTMessageLog(memory_message, MEMORY_SHRINK_PROMPT, CONFIRM_UNDERSTANDING)
+    prompt = buildGPTMessageLog(memory_message, MEMORY_SMALL_FORMAT_SHRINK_PROMPT + '\n' + MEMORY_SMALL_FORMAT_EXAMPLE)
     response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
     memory = []
@@ -515,23 +535,14 @@ def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
         if len(m.strip()) > 0:
             memory.append(m)
     logger.info("Shrunk memories.")
-
-def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
-    memory_str = '\n'.join(memory)
-    memory_message = createGPTMessage(memory_str, Role.USER)
-    prompt = buildGPTMessageLog(memory_message, MEMORY_MAKE_YAML_PROMPT, CONFIRM_UNDERSTANDING)
-    response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
-
-    memory = []
-    for m in response.split('\n'):
-        if len(m.strip()) > 0:
-            memory.append(m)
-    logger.info("Shrunk memories.")
+    return memory
 
 
 def combineMemories(memory):
-    memory_str = '\n'.join(memory)
-    prompt = buildGPTMessageLog(memory_str, MEMORY_COMBINE_PROMPT)
+    new_mem_str = memory[-1]
+    memory_str = "```compressed_memories\n" + '\n'.join(memory[:-1]) + "```\n" \
+              + f"```natural_lang_memory\n{new_mem_str}\n```"
+    prompt = buildGPTMessageLog(memory_str, MEMORY_SMALL_FORMAT_ADD_MEM + '\n' + MEMORY_SMALL_FORMAT_EXAMPLE)
     response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
     memory = []
@@ -539,6 +550,7 @@ def combineMemories(memory):
         if len(m.strip()) > 0:
             memory.append(m)
     logger.info("Combined memories.")
+    return memory
 
 
 def cullMemories(memory, explain=False):
@@ -607,7 +619,7 @@ If you understand, type '.' once."""},
             f.write(culled)
     else:
         logger.info("Not culling.")
-    return result if success else None
+    return memory
 
 
 def rememberGPT(bot, message_context_list, id_name_dict, memory=None):

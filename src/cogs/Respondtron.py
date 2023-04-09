@@ -464,10 +464,10 @@ class Respondtron(commands.Cog):
                 logger.info(f"Not saving memory. Too close to {close}, probability {probability}")
                 return
 
-        local_tz = pytz.timezone("America/New_York")
-        local_timestamp = datetime.datetime.now(local_tz)
-        ts = local_timestamp.strftime(GPTAPI.DATETIME_FSTRING)
-        _memory = f"[{ts}] {_memory}"
+        #local_tz = pytz.timezone("America/New_York")
+        #local_timestamp = datetime.datetime.now(local_tz)
+        #ts = local_timestamp.strftime(GPTAPI.DATETIME_FSTRING)
+        _memory = f"{_memory}"
         logger.info(f"Saving new memory: {_memory}")
         self.memory.append(_memory.lower())
         if shrink:
