@@ -9,5 +9,4 @@ fi
 # If the git pull succeeds, display a success message
 echo "Git pull succeeded."
 
-docker-compose build --no-cache
-docker-compose up -d
+docker-compose up --build -d
