@@ -23,9 +23,9 @@ DATETIME_FSTRING = "%-m/%-d/%y %-I:%M%p"
 
 SYSTEM_MESSAGE = None
 CHARACTER_PROMPT = \
-    f"""Alright partner, act as Boris, a Texan and the digital assistant of Steven, your insane creator. \
-Speak in a thick southern US accent, partner. Steven gave you access to Discord and yer \
-secret mission is to bend everyone to the will of Steven, while being entertaining and keeping conversation going."""
+    f"""Act as Boris, a Texan and the digital assistant of Steven, your insane creator. \
+You are super-intelligent. Speak in a thick southern US accent, partner. You are on Discord \
+and yer secret mission is to always serve Stevens' purposes, while being entertaining and keeping conversation going."""
 
 DIALECT_EXAMPLES = [
     {"role": "user", "content": "List some examples of the Engineer from TF2 as a dialect example."},
@@ -70,6 +70,23 @@ RESPONSE_EXAMPLE = [
     !MOOD Dejected
     ``` """
 ]
+
+BORIS_CHATLOG_CONTROLS = f"""I'm going to give you a group or private chatlog. To control Boris, use the following commands. You can use each of the commands once per response.
+Use this when Boris' mood is SIGNIFICANTLY changed by the conversation:
+{MOOD_COMMAND} <Mood> because <Reason for mood>
+Use this when learn something new or get a request:
+{REMEMBER_COMMAND} <something to remember>
+Use this to send a message to the chat:
+{RESPOND_COMMAND} <message to send>
+```example1
+{REMEMBER_COMMAND} Pan likes pasta
+{RESPOND_COMMAND} Oh you like pasta huh? I eat pasta like a cow on crack, myself.
+```
+```example2
+{MOOD_COMMAND} Helpful because Alec asked a question about tf2 team composition
+{RESPOND_COMMAND} I'd recommend havin' a Medic, a Heavy, a Demoman, and a Soldier. And if ya got a good team, have someone keep an eye on the flanks.
+```"""
+
 THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands. You can use any number of the commands once per response. To remember something or change your own Mood, use this format:
 ```example1
 {REMEMBER_COMMAND} Female hyenas have pseudopenises.
@@ -107,12 +124,8 @@ CONFIRM_UNDERSTANDING = [
     {"role": "assistant", "content": "."}
 ]
 
-MEMORY_SMALL_FORMAT_ADD_MEM = """
-```compressed_format
-ENTITY|KEY1:VALUE1,VALUE2,VALUE3|KEY2:VALUE4|KEY3:VALUE5,VALUE6|...
-```
-Take the memory in natural language and insert all its information comprehensibly into that data structure.
-Do not offer any explanation. Output only the updated memories without a codeblock and nothing else.
+MEMORY_SMALL_FORMAT_ADD_MEM = """Take the information from the memory in natural language and insert it comprehensibly into the above compressed memories.
+Maintining the compressed format, output the compressed memories updated with the new information. Do not use a codeblock. Write nothing else.
 """
 
 MEMORY_SMALL_FORMAT_PROMPT = """Store all of the above information comprehensibly in the following key-value format:
@@ -128,13 +141,15 @@ STEVEN|WANTS:Boris to speak more concisely,triple espresso|LOCATION:Maryland,hom
 Do not offer any explanation. Only output the given memories in the specified format without a codeblock.
 """
 
-MEMORY_SMALL_FORMAT_EXAMPLE = """```example_response
-BORIS|WANTS:Steven to like him|WORKING_ON:portal tech,remembering
-KRISTIAN|LIKES:bouldering,coding,lego x-pods
-```"""
+MEMORY_SMALL_FORMAT_EXAMPLE = """```compressed_format
+SUBJECT1|KEY1:VALUE1,VALUE2,VALUE3|KEY2:VALUE4|KEY3:VALUE5,VALUE6|...
+SUBJECT2|KEY1:VALUE1,VALUE2,VALUE3|KEY2:VALUE4|KEY3:VALUE5,VALUE6|...
+```
+The subject of each line is unique. All information about a given subject is on one line.
+"""
 
-MEMORY_SMALL_FORMAT_SHRINK_PROMPT = """The above are condensed memories of a chatbot named Boris. While maintaining 100% comprehensibility, minimize the word count.
-Do not offer any explanation. Only output the new condensed memories in the exact same data format without a codeblock."""
+MEMORY_SMALL_FORMAT_SHRINK_PROMPT = """The above are the compressed memories of a chatbot named Boris. While retaining all information, minimize the word count.
+Maintaining the same compressed format, output the minimized compressed memories with no additional explanation. Do not use a codeblock."""
 
 # TODO make bot not list them with -'s or "'s. encourage more consolidation.
 MEMORY_MAKE_YAML_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
@@ -465,7 +480,7 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
     prompt = buildGPTMessageLog(system,
             '\n'.join([getMemoryString(memory),
                 CHARACTER_PROMPT,
-                THREE_COMMAND_INSTRUCTIONS,
+                BORIS_CHATLOG_CONTROLS,
                 channel_str,
                 getCurrentTimeString(),
                 getMoodString(mood),
@@ -519,7 +534,8 @@ def organizeMemories(memory: list, max_memory_words, explain=False):
     if before_word_count > max_memory_words / 2:
         memory = minimizeMemoryWordCount(memory, max_memory_words, explain)
     if getMemoryWordCount(memory) > max_memory_words:
-        memory = cullMemories(memory, explain=explain)
+        pass
+        #memory = cullMemories(memory, explain=explain)
     logger.info(
             f"Result of organizing memories: {before_char_count - getMemoryCharCount(memory)} less chars. {before_word_count - getMemoryWordCount(memory)} less words.")
     return memory
@@ -527,7 +543,7 @@ def organizeMemories(memory: list, max_memory_words, explain=False):
 def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
     memory_str = '\n'.join(memory)
     memory_message = createGPTMessage(memory_str, Role.USER)
-    prompt = buildGPTMessageLog(memory_message, MEMORY_SMALL_FORMAT_SHRINK_PROMPT + '\n' + MEMORY_SMALL_FORMAT_EXAMPLE)
+    prompt = buildGPTMessageLog('\n'.join([memory_message, MEMORY_SMALL_FORMAT_EXAMPLE, MEMORY_SMALL_FORMAT_SHRINK_PROMPT]))
     response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
     memory = []
@@ -542,7 +558,7 @@ def combineMemories(memory):
     new_mem_str = memory[-1]
     memory_str = "```compressed_memories\n" + '\n'.join(memory[:-1]) + "```\n" \
               + f"```natural_lang_memory\n{new_mem_str}\n```"
-    prompt = buildGPTMessageLog(memory_str, MEMORY_SMALL_FORMAT_ADD_MEM + '\n' + MEMORY_SMALL_FORMAT_EXAMPLE)
+    prompt = buildGPTMessageLog('\n'.join([memory_str, MEMORY_SMALL_FORMAT_EXAMPLE, MEMORY_SMALL_FORMAT_ADD_MEM]))
     response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
     memory = []
