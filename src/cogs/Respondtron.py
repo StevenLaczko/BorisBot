@@ -46,8 +46,8 @@ BAD_VOTE = "bad"
 SETTINGS_FILE = "learned_reply_settings"
 MAX_CONTEXT_WORDS = 100
 MAX_CONVO_WORDS = 200
-MEMORY_CHANCE = 1
-CONVO_END_DELAY = datetime.timedelta(minutes=10)
+MEMORY_CHANCE = 0
+CONVO_END_DELAY = datetime.timedelta(hours=1)
 ADD_COMMAND_REACTIONS = True
 RESPONSE_FILENAME = "responses.txt"
 MEMORY_FILENAME = "memories.json"
@@ -396,7 +396,7 @@ class Respondtron(commands.Cog):
         # then search the server for the term, and give it to Boris (in a memory) for extra response context.
         pass
 
-    async def getContext(self, channel, before, after=False, num_messages_requested=None,
+    async def getContext(self, channel, before, after: Union[bool, None] = False, num_messages_requested=None,
                          max_context_words=None, ignore_list=None):
         if not max_context_words:
             max_context_words = self.bot.settings["max_context_words"]
@@ -421,6 +421,8 @@ class Respondtron(commands.Cog):
                     continue
                 messages.append(m)
                 word_count += len(m.clean_content.split())
+                if word_count > max_context_words:
+                    break
             if len(messages) > 0:
                 before = messages[-1]
 
@@ -499,7 +501,7 @@ class Respondtron(commands.Cog):
             _memory = self.memory
         if not _mood:
             _mood = self.mood
-        context = await self.getContext(message.channel, message, max_context_words=max_context_words)
+        context = await self.getContext(message.channel, message, max_context_words=max_context_words, after=None)
         async with message.channel.typing():
             bot_response: BotResponse = await GPTAPI.getGPTResponse(self.bot, message, context, True,
                                                                     self.currentConversations[message.channel.id],
