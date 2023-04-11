@@ -124,8 +124,9 @@ CONFIRM_UNDERSTANDING = [
     {"role": "assistant", "content": "."}
 ]
 
-MEMORY_SMALL_FORMAT_ADD_MEM = """Take the information from the memory in natural language and insert it comprehensibly into the above compressed memories.
-Maintining the compressed format, output the compressed memories updated with the new information. Do not use a codeblock. Write nothing else.
+MEMORY_SMALL_FORMAT_ADD_MEM = """Extract all information from the above NAT_LANG memory and insert the information into the COMPRESSED_MEMORIES according to the compressed memory format.
+It is VERY important that there is no duplication of information. It is VERY important that all information is retained. It is VERY important that the compressed memory format is maintained.
+Offer no explanation. Output the compressed memories updated with the new information. Do not use a codeblock.
 """
 
 MEMORY_SMALL_FORMAT_PROMPT = """Store all of the above information comprehensibly in the following key-value format:
@@ -141,15 +142,16 @@ STEVEN|WANTS:Boris to speak more concisely,triple espresso|LOCATION:Maryland,hom
 Do not offer any explanation. Only output the given memories in the specified format without a codeblock.
 """
 
-MEMORY_SMALL_FORMAT_EXAMPLE = """```compressed_format
-SUBJECT1|KEY1:VALUE1,VALUE2,VALUE3|KEY2:VALUE4|KEY3:VALUE5,VALUE6|...
-SUBJECT2|KEY1:VALUE1,VALUE2,VALUE3|KEY2:VALUE4|KEY3:VALUE5,VALUE6|...
+MEMORY_SMALL_FORMAT_EXAMPLE = """```compressed_memory_format
+ENTITY1|KEY1:VALUE1,VALUE2,VALUE3|KEY2:VALUE4|KEY3:VALUE5,VALUE6|...
+ENTITY2|KEY4:VALUE7,VALUE8,VALUE9|KEY5:VALUE10|...
 ```
-The subject of each line is unique. All information about a given subject is on one line.
+Each line has all of the information on a specific entity. All information about a given subject is on one line.
 """
 
-MEMORY_SMALL_FORMAT_SHRINK_PROMPT = """The above are the compressed memories of a chatbot named Boris. While retaining all information, minimize the word count.
-Maintaining the same compressed format, output the minimized compressed memories with no additional explanation. Do not use a codeblock."""
+MEMORY_SMALL_FORMAT_SHRINK_PROMPT = """The above are the memories of a chatbot named Boris in the compressed memory format. Each line corresponds to information on a specific entity, like a person or a movie. Lower the word count of the data. Do this by combining duplicated information and removing filler words and article adjectives.
+It is VERY important that all information is retained. It is VERY important that the data format is maintained.
+Output the new compressed data with no additional explanation. Write nothing else. Do not use a codeblock."""
 
 # TODO make bot not list them with -'s or "'s. encourage more consolidation.
 MEMORY_MAKE_YAML_PROMPT = """Given the above memories of a chatbot named Boris, lower the character count.
@@ -541,7 +543,7 @@ def organizeMemories(memory: list, max_memory_words, explain=False):
     return memory
 
 def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
-    memory_str = '\n'.join(memory)
+    memory_str = "```COMPRESSED_MEMORIES\n" + '\n'.join(memory) + "\n```\n"
     memory_message = createGPTMessage(memory_str, Role.USER)
     prompt = buildGPTMessageLog('\n'.join([memory_message, MEMORY_SMALL_FORMAT_EXAMPLE, MEMORY_SMALL_FORMAT_SHRINK_PROMPT]))
     response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
@@ -556,8 +558,8 @@ def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
 
 def combineMemories(memory):
     new_mem_str = memory[-1]
-    memory_str = "```compressed_memories\n" + '\n'.join(memory[:-1]) + "```\n" \
-              + f"```natural_lang_memory\n{new_mem_str}\n```"
+    memory_str = "```COMPRESSED_MEMORIES\n" + '\n'.join(memory[:-1]) + "\n```\n" \
+              + f"```NAT_LANG\n{new_mem_str}\n```"
     prompt = buildGPTMessageLog('\n'.join([memory_str, MEMORY_SMALL_FORMAT_EXAMPLE, MEMORY_SMALL_FORMAT_ADD_MEM]))
     response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 

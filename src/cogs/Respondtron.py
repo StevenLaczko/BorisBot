@@ -185,7 +185,7 @@ class Respondtron(commands.Cog):
             if 0.3 > random.random():
                 await self.replyToMessage(message)
         # TODO 5% chance asks GPT if it's relevant to Boris or his memories
-        elif 0.05 > random.random():
+        elif 0.02 > random.random():
             await self.replyToMessage(message)
 
     # COMMANDS
