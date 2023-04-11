@@ -502,15 +502,14 @@ class Respondtron(commands.Cog):
         if not _mood:
             _mood = self.mood
         context = await self.getContext(message.channel, message, max_context_words=max_context_words, after=None)
-        async with message.channel.typing():
-            bot_response: BotResponse = await GPTAPI.getGPTResponse(self.bot, message, context, True,
-                                                                    self.currentConversations[message.channel.id],
-                                                                    self.bot.settings["id_name_dict"],
-                                                                    memory=_memory, mood=_mood)
-            if bot_response.response_str:
-                logger.info(f"Response: {bot_response.response_str}")
-                msg = await message.channel.send(bot_response.response_str)
-                self.currentConversations[message.channel.id].bot_messageid_response[msg.id] = bot_response.full_response
+        bot_response: BotResponse = await GPTAPI.getGPTResponse(self.bot, message, context, True,
+                                                                self.currentConversations[message.channel.id],
+                                                                self.bot.settings["id_name_dict"],
+                                                                memory=_memory, mood=_mood)
+        if bot_response.response_str:
+            logger.info(f"Response: {bot_response.response_str}")
+            msg = await message.channel.send(bot_response.response_str)
+            self.currentConversations[message.channel.id].bot_messageid_response[msg.id] = bot_response.full_response
         if bot_response.new_memory:
             if ADD_COMMAND_REACTIONS:
                 await message.add_reaction('🤔')
@@ -567,7 +566,8 @@ class Respondtron(commands.Cog):
             logger.info("Response: " + response)
             await message.channel.send(response)
         else:
-            await self.replyGPT(message)
+            async with message.channel.typing():
+                await self.replyGPT(message)
             return
 
     async def botMatchString(self, str1, str2):

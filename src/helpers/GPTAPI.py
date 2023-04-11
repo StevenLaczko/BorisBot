@@ -545,7 +545,7 @@ def organizeMemories(memory: list, max_memory_words, explain=False):
 def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
     memory_str = "```COMPRESSED_MEMORIES\n" + '\n'.join(memory) + "\n```\n"
     memory_message = createGPTMessage(memory_str, Role.USER)
-    prompt = buildGPTMessageLog('\n'.join([memory_message, MEMORY_SMALL_FORMAT_EXAMPLE, MEMORY_SMALL_FORMAT_SHRINK_PROMPT]))
+    prompt = buildGPTMessageLog('\n'.join([memory_str, MEMORY_SMALL_FORMAT_EXAMPLE, MEMORY_SMALL_FORMAT_SHRINK_PROMPT]))
     response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
     memory = []
