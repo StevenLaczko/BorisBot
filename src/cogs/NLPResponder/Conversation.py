@@ -25,4 +25,7 @@ class Conversation:
     def get_memory_ids(self):
         return self.context_stack.get_memory_ids()
 
+    def get_prompt(self, message, conversation):
+        self.context_stack.get_combined_prompt(message, conversation)
+
 

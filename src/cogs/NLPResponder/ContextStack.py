@@ -8,7 +8,7 @@ class ContextStack(OrderedSet):
     def __init__(self, context_dict, memory_pool, context=None, contexts=None, use_main_context=True):
         super().__init__()
         self.memory_pool = memory_pool
-        self.context_dict = context_dict
+        self.context_dict: dict = context_dict
 
         if use_main_context:
             self.use_main()
@@ -23,6 +23,12 @@ class ContextStack(OrderedSet):
 
     def use_main(self):
         return self.add(self.context_dict["main"])
+
+    def get_combined_prompt(self, message, conversation):
+        prompt: Prompt = Prompt()
+        for c in self.context_dict.values():
+            prompt.stack(c)
+
 
     def get_memory_ids(self) -> list[uuid.UUID]:
         ids: list[uuid.UUID] = []

@@ -32,7 +32,7 @@ class NLPResponder(commands.Cog):
         self.bot = bot
         self.prefix: str = prefix
         self.memory_file_path = DiscordBot.getFilePath(memory_filename)
-        self.bot_brain = BotBrain()
+        self.bot_brain = BotBrain(self.bot)
 
         # load memories
         if os.path.isfile(self.memory_file_path):
@@ -126,42 +126,6 @@ class NLPResponder(commands.Cog):
             await self.storeMemory(context)
             await self.setMood(context)
 
-    async def getContext(self, channel, before, after=False, num_messages_requested=None,
-                         max_context_words=None, ignore_list=None):
-        if not max_context_words:
-            max_context_words = self.bot.settings["max_context_words"]
-            if not max_context_words:
-                max_context_words = MAX_CONTEXT_WORDS
-        logger.info("Getting context")
-        all_messages = []
-        now = datetime.datetime.now(tz=pytz.UTC)
-        if num_messages_requested is None:
-            num_messages_requested = self.bot.settings["num_messages_per_request"]
-        if after is False:
-            past_cutoff = now - datetime.timedelta(minutes=30)
-            after = past_cutoff
-        # Keep getting messages until the word count reach 100
-        word_count = 0
-        do_repeat = True
-        while do_repeat:
-            messages: list[discord.Message] = []
-            async for m in channel.history(limit=num_messages_requested, after=after, before=before,
-                                           oldest_first=False):
-                if ignore_list and m.author.id in ignore_list:
-                    continue
-                messages.append(m)
-                word_count += len(m.clean_content.split())
-            if len(messages) > 0:
-                before = messages[-1]
-
-            all_messages.extend(messages)
-            if word_count > max_context_words or len(messages) < num_messages_requested:
-                do_repeat = False
-
-        logger.info(f"Number of messages looked at: {len(all_messages)}")
-        logger.info(f"Word count: {word_count}")
-        all_messages.reverse()
-        return all_messages
 
     async def getConvoContext(self, channel, before=False,
                               after: Union[discord.Message, datetime.datetime, None, bool] = False,
@@ -222,35 +186,6 @@ class NLPResponder(commands.Cog):
 
     # pool is a memory pool. It can be a string for one pool, or a list of pools
     async def replyGPT(self, message, conversation: Conversation, max_context_words=None, _memory=None, _mood=None):
-        cstack = conversation.context_stack
-        if not max_context_words:
-            max_context_words = self.bot.settings["max_context_words"]
-            if not max_context_words:
-                max_context_words = MAX_CONTEXT_WORDS
-        if not _memory:
-            _memory = cstack.get_memory_ids()
-        if not _mood:
-            _mood = conversation.mood
-        chatlog_context = await self.getContext(message.channel, message, max_context_words=max_context_words)
-        async with message.channel.typing():
-            bot_response: BotResponse = await GPTAPI.getGPTResponse(self.bot, message, chatlog_context, True,
-                                                                    self.bot_brain.currentConversations[
-                                                                        message.channel.id],
-                                                                    self.bot.settings["id_name_dict"],
-                                                                    memory=_memory, mood=_mood)
-        if bot_response.response_str:
-            logger.info(f"Response: {bot_response.response_str}")
-            msg = await message.channel.send(bot_response.response_str)
-            self.bot_brain.currentConversations[message.channel.id].bot_messageid_response[
-                msg.id] = bot_response.full_response
-        if bot_response.new_memory:
-            if ADD_COMMAND_REACTIONS:
-                await message.add_reaction('🤔')
-            await self.bot_brain.save_memory(cstack, bot_response.new_memory)
-        if bot_response.new_mood:
-            if ADD_COMMAND_REACTIONS:
-                await message.add_reaction('☝')
-            self.bot_brain.set_mood(bot_response.new_mood)
 
     async def replyToMessage(self, message, conversation):
         logger.info("Responding")

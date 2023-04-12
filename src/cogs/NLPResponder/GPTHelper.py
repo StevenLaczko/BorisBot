@@ -2,6 +2,7 @@ import enum
 from typing import Union
 
 import discord
+import dotenv
 import openai
 import pytz, datetime
 
@@ -244,7 +245,7 @@ def getContextGPTMix(bot, messages: list[discord.Message], conversation: Convers
 
     response_log = conversation.bot_messageid_response
     for i, m in enumerate(messages):
-        if len(messages)-i <= LEN_ASSISTANT_MESSAGES and response_log and m.id in response_log:
+        if len(messages) - i <= LEN_ASSISTANT_MESSAGES and response_log and m.id in response_log:
             if len(log_str) != 0:
                 log_str += "```"
                 result.append(log_str)
@@ -307,7 +308,6 @@ def getMemoryString(memory: list[str]) -> str:
     else:
         memory_str = ""
 
-
     return memory_str
 
 
@@ -338,6 +338,7 @@ def getMessageableString(messageable: discord.abc.Messageable, id_name_dict):
 
 def getCurrentTimeString():
     return f"Current date/time: {datetime.datetime.now().strftime(DATETIME_FSTRING)}"
+
 
 def appendToCommand(new_line, cmd, cmd_str):
     i_start = len(cmd) if new_line.startswith(cmd) else 0
@@ -377,45 +378,40 @@ async def parseGPTResponse(full_response_str) -> BotResponse:
 
     return BotResponse(full_response_str, response_str, new_mood=new_mood, new_memory=new_memory)
 
+
 def getEmbedding(string):
+    dotenv.load_dotenv()
+    openai.api_key = os.environ.get("OPENAI_API_KEY")
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     result = openai.Embedding.create(
         input=string, model="text-embedding-ada-002"
     )["data"][0]["embedding"]
     return result
 
-async def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message],
-                         use_plaintext: bool,
-                         conversation: Conversation,
-                         id_name_dict: dict,
-                         memory: list[str] = None,
-                         mood: str = "") -> BotResponse:
-    openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
 
-
-    #     test_memory_str = """```boris_memories.data
-    # Soda:likes:Soldier,Medic
-    # Luna:description:touchy Discord friend of Steven's|likes:nukes|personality:sassy,genocidal tendencies|promised:not to incite actual trouble.
-    # Steven:wants:chat casually with Boris,remember to be more casual using !remember,kill clones in basement|has:clones do tasks around house|values:not value lives of clones|confused_about:Boris' double response|favorite_clone:hippotato|making:mac and cheese with heavy cream today|warns:not respond to messages that start with '~' because it triggers double response|remindme_to_add:\"succinctly\" to prompts to encourage conversation
-    # Phone_clone:status:still around
-    # Compromise_clone:status:killed
-    # Boris:should:keep an eye on L.U.N.A. to prevent her from taking over the world or sending nuke gifs|keeps_an_eye:on L.U.N.A. and ensures professional communication|suggested_new_commands:\"~remindme\" command for reminders and research/calculations.
-    # ```
-    # """
-    message_context_list.append(message)
+async def getGPTPrompt(bot, message, message_context_list, conversation, memory_str, id_name_dict):
     context = getContextGPTMix(bot, message_context_list, conversation, id_name_dict)
     channel_str = getMessageableString(message.channel, id_name_dict) if id_name_dict else ""
     system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
     prompt = buildGPTMessageLog(system,
-                                '\n'.join([getMemoryString(memory),
+                                '\n'.join([memory_str,
                                            CHARACTER_PROMPT,
                                            THREE_COMMAND_INSTRUCTIONS,
                                            channel_str,
                                            getCurrentTimeString(),
-                                           getMoodString(mood),
+                                           getMoodString(conversation.mood),
                                            THREE_COMMAND_FINAL_INSTRUCTIONS]),
                                 *context
                                 )
+    return prompt
+
+
+async def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message],
+                         conversation: Conversation,
+                         id_name_dict: dict,
+                         memory: list[str] = None,
+                         mood: str = "") -> BotResponse:
+    message_context_list.append(message)
 
     logger.info(f"Getting GPT response for '{message.clean_content}'")
     logger.debug(f"PROMPT:\n{prompt}")
@@ -454,10 +450,11 @@ def getMemoryCharCount(memory):
         char_count += len(m)
     return char_count
 
+
 def organizeMemories(memory: list, max_memory_words, explain=False):
     before_word_count = getMemoryWordCount(memory)
     before_char_count = getMemoryCharCount(memory)
-    #combineMemories(memory)
+    # combineMemories(memory)
     if before_word_count > max_memory_words / 2:
         minimizeMemoryWordCount(memory, max_memory_words, explain)
     if getMemoryWordCount(memory) > max_memory_words:
@@ -465,6 +462,7 @@ def organizeMemories(memory: list, max_memory_words, explain=False):
     logger.info(
         f"Result of organizing memories: {before_char_count - getMemoryCharCount(memory)} less chars. {before_word_count - getMemoryWordCount(memory)} less words.")
     return memory
+
 
 def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
     memory_str = '\n'.join(memory)
@@ -477,6 +475,7 @@ def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
         if len(m.strip()) > 0:
             memory.append(m)
     logger.info("Shrunk memories.")
+
 
 def combineMemories(memory):
     memory_str = '\n'.join(memory)

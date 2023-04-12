@@ -5,8 +5,10 @@ from typing import Union
 import discord
 
 from src.Boris import Boris
-from src.cogs.NLPResponder import Prompts, GPTAPI
+from src.cogs.NLPResponder import Prompts, GPTAPI, DiscordHelper
+from src.cogs.NLPResponder.BotResponse import BotResponse
 from src.cogs.NLPResponder.Context import Context
+from src.cogs.NLPResponder.Memory import Memory
 from src.helpers import StringMatchHelp
 import logging
 
@@ -20,19 +22,66 @@ class BotBrain:
     def __init__(self, bot,
                  memory_match_prob=0.8,
                  contexts_file_path="data/contexts.json",
-                 memory_file_path="data/memories.json"):
+                 memory_file_path="data/memories_dict.json",
+                 hnsw_file_path="data/hnsw.pkl"):
         self.bot: DiscordBot = bot
         self.memory_match_prob = memory_match_prob
         self.memory_file_path = memory_file_path
         self.contexts_file_path = contexts_file_path
+        self.hnsw_file_path = hnsw_file_path
         self.currentConversations: dict[int, Union[Conversation, None]] = {}
-        self._memory_pool: MemoryPool = MemoryPool(self.memory_file_path)
+        self._memory_pool: MemoryPool = MemoryPool(
+            memory_file_path=self.memory_file_path,
+            hnsw_file_path=self.hnsw_file_path
+        )
         self._contexts: dict = self.load_contexts()
         with open(self.contexts_file_path, 'r') as f:
             self._contexts: dict = self.create_contexts_from_json(json.load(f))
 
+    def reply(self,
+              message: discord.Message,
+              conversation: Conversation,
+              max_context_words=None,
+              _memory=None,
+              _mood=None):
 
-    def start_conversation(self, channel: Union[discord.DMChannel, discord.TextChannel], message_list: list[discord.Message], user_ids=None):
+        if not max_context_words:
+            max_context_words = self.bot.settings["max_context_words"]
+        if not _memory:
+            _memory = self.get_memories_string(conversation)
+        if not _mood:
+            _mood = conversation.mood
+
+        chatlog_context = await DiscordHelper.getContext(message.channel,
+                                                         message,
+                                                         bot=self.bot,
+                                                         max_context_words=max_context_words)
+        async with message.channel.typing():
+            prompt = conversation.get_prompt(message, conversation)
+            bot_response: BotResponse \
+                = await GPTAPI.getGPTResponse(self.bot,
+                                              message,
+                                              chatlog_context,
+                                              self.bot_brain.currentConversations[message.channel.id],
+                                              self.bot.settings["id_name_dict"],
+                                              memory=_memory,
+                                              mood=_mood)
+        if bot_response.response_str:
+            logger.info(f"Response: {bot_response.response_str}")
+            msg = await message.channel.send(bot_response.response_str)
+            self.bot_brain.currentConversations[message.channel.id].bot_messageid_response[
+                msg.id] = bot_response.full_response
+        if bot_response.new_memory:
+            if ADD_COMMAND_REACTIONS:
+                await message.add_reaction('🤔')
+            await self.bot_brain.save_memory(cstack, bot_response.new_memory)
+        if bot_response.new_mood:
+            if ADD_COMMAND_REACTIONS:
+                await message.add_reaction('☝')
+            self.bot_brain.set_mood(bot_response.new_mood)
+
+    def start_conversation(self, channel: Union[discord.DMChannel, discord.TextChannel],
+                           message_list: list[discord.Message], user_ids=None):
         self.currentConversations[channel.id] = Conversation(channel, timestamp=datetime.now())
 
     def isMessageInConversation(self, message: discord.Message):
@@ -49,6 +98,9 @@ class BotBrain:
         else:
             newline_memories = '\n'.join(memory_strings)
             return f"```memories\n{newline_memories}\n```"
+
+    def get_memories_related(self, memory: Memory):
+        self._memory_pool.get_similar(memory)
 
     def get_memory_list(self):
         pass
