@@ -176,8 +176,8 @@ class Respondtron(commands.Cog):
             await self.replyToMessage(message)
         elif "boris" in message.clean_content.lower():
             logger.warning("I heard my name.")
-            if (message.channel.id in self.currentConversations and self.currentConversations[
-                message.channel.id]) or 0.2 > random.random():
+            if (message.channel.id in self.currentConversations
+                and self.currentConversations[message.channel.id]) or 0.2 > random.random():
                 await self.replyToMessage(message)
         elif message.channel.id in self.currentConversations and self.currentConversations[message.channel.id]:
             logger.warning("Message received in convo channel")
@@ -267,18 +267,17 @@ class Respondtron(commands.Cog):
     @commands.command(name="remember", help="Remember.")
     @commands.is_owner()
     async def remember(self, ctx):
-        await self.storeMemory(await self.getConvoContext(ctx.channel, after=None, ignore_list=self.ignore_list), self.bot.settings["id_name_dict"])
-
-
+        await self.storeMemory(await self.getConvoContext(ctx.channel, after=None, ignore_list=self.ignore_list),
+                               self.bot.settings["id_name_dict"])
 
     # METHODS
 
     async def stopConversation(self, channel):
         if channel.type is discord.ChannelType.private:
-            logger.info(f"{CONVO_END_DELAY} passed. Ending convo in DM with {channel.recipient if channel.recipient else 'unknown user'}")
+            logger.info(
+                f"{CONVO_END_DELAY} passed. Ending convo in DM with {channel.recipient if channel.recipient else 'unknown user'}.")
         else:
-            logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
-
+            logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}.")
 
         self.currentConversations[channel.id] = None
         if MEMORY_CHANCE > random.random():
@@ -466,9 +465,9 @@ class Respondtron(commands.Cog):
                 logger.info(f"Not saving memory. Too close to {close}, probability {probability}")
                 return
 
-        #local_tz = pytz.timezone("America/New_York")
-        #local_timestamp = datetime.datetime.now(local_tz)
-        #ts = local_timestamp.strftime(GPTAPI.DATETIME_FSTRING)
+        # local_tz = pytz.timezone("America/New_York")
+        # local_timestamp = datetime.datetime.now(local_tz)
+        # ts = local_timestamp.strftime(GPTAPI.DATETIME_FSTRING)
         _memory = f"{_memory}"
         logger.info(f"Saving new memory: {_memory}")
         self.memory.append(_memory.lower())
@@ -523,7 +522,8 @@ class Respondtron(commands.Cog):
     async def replyToMessage(self, message: discord.Message):
         logger.info("Responding")
         if message.channel.id not in self.currentConversations or not self.currentConversations[message.channel.id]:
-            self.currentConversations[message.channel.id] = Conversation(message.channel, timestamp=datetime.datetime.now())
+            self.currentConversations[message.channel.id] = Conversation(message.channel,
+                                                                         timestamp=datetime.datetime.now())
         else:
             self.currentConversations[message.channel.id].timestamp = datetime.datetime.now()
         # get trigger
@@ -571,7 +571,8 @@ class Respondtron(commands.Cog):
             return
 
     async def botMatchString(self, str1, str2):
-        args = StringMatchHelp.fuzzyMatchString(str1, str2, self.learned_reply_settings[ARGS.WEIGHTS], self.learned_reply_settings[ARGS.PROB_MIN])
+        args = StringMatchHelp.fuzzyMatchString(str1, str2, self.learned_reply_settings[ARGS.WEIGHTS],
+                                                self.learned_reply_settings[ARGS.PROB_MIN])
         self.lastScores = args[2]
         if args[3] is not None:
             logger.info(args[2])
