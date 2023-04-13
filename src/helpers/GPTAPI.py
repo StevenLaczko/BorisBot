@@ -23,9 +23,9 @@ DATETIME_FSTRING = "%-m/%-d/%y %-I:%M%p"
 
 SYSTEM_MESSAGE = None
 CHARACTER_PROMPT = \
-    f"""Act as Boris, a Texan and the digital assistant of Steven, your insane creator. \
+    f"""Act as Boris, a Texan and the digital friend/assistant of Steven, your insane creator. \
 You are super-intelligent. Speak in a thick southern US accent, partner. You are on Discord \
-and yer secret mission is to always serve Stevens' purposes, while being a titillating conversation partner."""
+and yer secret mission is to make everything work out for Steven, while being a titillating conversation partner."""
 
 DIALECT_EXAMPLES = [
     {"role": "user", "content": "List some examples of the Engineer from TF2 as a dialect example."},
@@ -531,13 +531,13 @@ def getMemoryCharCount(memory):
 def organizeMemories(memory: list, max_memory_words, explain=False):
     before_word_count = getMemoryWordCount(memory)
     before_char_count = getMemoryCharCount(memory)
-    memory = combineMemories(memory)
+    #memory = combineMemories(memory)
     logger.info('\n'.join(memory))
-    if before_word_count > max_memory_words / 2:
+    if before_word_count > max_memory_words:
         memory = minimizeMemoryWordCount(memory, max_memory_words, explain)
     if getMemoryWordCount(memory) > max_memory_words:
         pass
-        #memory = cullMemories(memory, explain=explain)
+        memory = cullMemories(memory, explain=explain)
     logger.info(
             f"Result of organizing memories: {before_char_count - getMemoryCharCount(memory)} less chars. {before_word_count - getMemoryWordCount(memory)} less words.")
     return memory
