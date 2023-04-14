@@ -179,7 +179,13 @@ REMEMBER_FREQ_PENALTY = 0
 MEMORY_WORD_COUNT_MAX = 300
 
 
-def promptGPT(gptMessages, temperature=TEMPERATURE, frequency_penalty=FREQ_PENALTY, model="gpt-3.5-turbo"):
+def promptGPT(gptMessages, temperature=None, frequency_penalty=None, model=None):
+    if not temperature:
+        temperature = TEMPERATURE
+    if not frequency_penalty:
+        frequency_penalty = FREQ_PENALTY
+    if not model:
+        model = "gpt-3.5-turbo"
     response = openai.ChatCompletion.create(
         model=model,
         messages=gptMessages,
