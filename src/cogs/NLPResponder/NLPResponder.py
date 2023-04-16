@@ -8,11 +8,12 @@ import discord
 import pytz
 from discord.ext import commands
 
-import src.cogs.NLPResponder.GPTAPI as GPTAPI
+import src.cogs.NLPResponder.GPTHelper as GPTHelper
 from src.cogs.NLPResponder.BotBrain import BotBrain
 from src.cogs.NLPResponder.BotResponse import BotResponse
 from src.cogs.NLPResponder.Context import Context
 from src.cogs.NLPResponder.Conversation import Conversation
+from src.cogs.NLPResponder.commands import BorisCommands
 from src.helpers import DiscordBot
 from src.helpers.logging_config import logger
 
@@ -32,7 +33,9 @@ class NLPResponder(commands.Cog):
         self.bot = bot
         self.prefix: str = prefix
         self.memory_file_path = DiscordBot.getFilePath(memory_filename)
-        self.bot_brain = BotBrain(self.bot)
+        context_dir = "data/contexts/"
+        c_files = ["main-context.json"]
+        self.bot_brain = BotBrain(self.bot, context_dir=context_dir, context_files=c_files, commands=BorisCommands.commands)
 
         # load memories
         if os.path.isfile(self.memory_file_path):
@@ -100,8 +103,8 @@ class NLPResponder(commands.Cog):
         if MEMORY_CHANCE > random.random():
             chatlog_context = await self.getConvoContext(channel, after=None, ignore_list=self.bot.settings["ignore_list"])
             await self.bot_brain.make_convo_memory(context, self.bot, chatlog_context)
-            await self.bot_brain.setMood(GPTAPI.getMood(self.bot, chatlog_context, self.bot_brain.getMemoryPool("main"),
-                                                                self.bot.settings["id_name_dict"]))
+            await self.bot_brain.setMood(GPTAPI.getMood(self.bot, chatlog_context, self.bot_brain.getMemoriesFromStack("main"),
+                                                        self.bot.settings["id_name_dict"]))
 
     # COMMANDS
 
@@ -186,11 +189,11 @@ class NLPResponder(commands.Cog):
 
     # pool is a memory pool. It can be a string for one pool, or a list of pools
     async def replyGPT(self, message, conversation: Conversation, max_context_words=None, _memory=None, _mood=None):
+        pass
 
     async def replyToMessage(self, message, conversation):
         logger.info("Responding")
-        context = conversation.context if conversation else "main"
         if not self.bot_brain.isMessageInConversation(message):
-            self.bot_brain.currentConversations[message.channel.id] = Conversation(message.channel, context,
-                                                                                   timestamp=datetime.datetime.now())
-        await self.replyGPT(message, conversation)
+            conversation = self.bot_brain.create_conversation(message.channel)
+            self.bot_brain.currentConversations[message.channel.id] = conversation
+        await self.bot_brain.reply(message, conversation)

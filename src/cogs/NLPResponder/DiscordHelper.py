@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
 
 import discord as discord
+import pytz
 
 from src.helpers.logging_config import logger
+from src.helpers.Settings import settings
 
 
 async def getContext(channel, before,
@@ -10,19 +12,19 @@ async def getContext(channel, before,
                      after=False,
                      num_messages_requested=None,
                      max_context_words=None,
-                     ignore_list=None, pytz=None):
+                     ignore_list=None):
     if not max_context_words:
         if not bot:
             raise (ValueError("Bot with settings file and/or max_context_words must be given."))
-        max_context_words = bot.settings["max_context_words"]
+        max_context_words = settings.max_context_words
     if num_messages_requested is None:
         if not bot:
             raise (ValueError("Bot with settings file and/or num_messages_requested must be given."))
-        num_messages_requested = bot.settings["num_messages_per_request"]
+        num_messages_requested = settings.num_messages_per_request
 
     logger.info("Getting context")
     all_messages = []
-    now = datetime.now(tz=pytz.UTC)
+    now = datetime.now(pytz.UTC)
     if after is False:
         past_cutoff = now - timedelta(minutes=30)
         after = past_cutoff

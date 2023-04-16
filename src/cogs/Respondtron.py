@@ -295,7 +295,7 @@ class Respondtron(commands.Cog):
                 logger.info("Added response to existing trigger")
                 responses.write(''.join(lines))
 
-    def getLearnedReply(self, message):
+    async def getLearnedReply(self, message):
         # get trigger
         message_string = message.clean_content.strip()
         triggerList = message_string.split()[1:]
@@ -336,8 +336,6 @@ class Respondtron(commands.Cog):
             await message.channel.send(response)
             logger.info("Response: " + response)
             await message.reply(response)
-        else:
-            await message.channel.send(self.botNoResponse)
 
     async def botMatchString(self, str1, str2):
         args = StringMatchHelp.fuzzyMatchString(str1, str2, self.learned_reply_settings[ARGS.WEIGHTS],

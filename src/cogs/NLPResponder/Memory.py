@@ -1,7 +1,7 @@
-import hashlib
+import datetime
 import uuid
 
-from src.cogs.NLPResponder import GPTHelper
+from src.cogs.NLPResponder.GPTHelper import getEmbedding
 
 
 def fnv1a_32(s: bytes) -> int:
@@ -32,14 +32,14 @@ def get_32_int_guid():
 
 
 class Memory:
-    def __init__(self, string, timestamp, embedding=None):
+    def __init__(self, string, timestamp=None, embedding=None):
         self.string = string
-        self.timestamp = timestamp
+        self.timestamp = timestamp if timestamp else datetime.datetime.now()
         self.embedding = embedding if embedding is not None else self.get_embedding()
         self.id = get_32_int_guid()
 
     def get_embedding(self):
-        return GPTAPI.getEmbedding(self.string)
+        return getEmbedding(self.string)
 
     def __len__(self):
         return len(self.embedding)

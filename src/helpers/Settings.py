@@ -17,7 +17,7 @@ def lazy_property(func):
 class Settings:
     _instance = None
     
-    def __new__(cls, config_file='settings.json'):
+    def __new__(cls, config_file='data/settings.json'):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._config_file = config_file
@@ -28,14 +28,16 @@ class Settings:
         with open(self._config_file, 'r') as f:
             self._config = json.load(f)
 
-        self._id_name_dict = {int(k): v for k, v in self._config['id_name_dict']}
-        self._ignore_list = {int(k): v for k, v in self._config['ignore_list']}
+        self._id_name_dict = {int(k): v for k, v in self._config['id_name_dict'].items()}
+        self._ignore_list = {int(k): v for k, v in self._config['ignore_list'].items()}
         self._log_level = self._config['log_level']
         self._max_context_words = self._config['conversation']['max_context_words']
         self._max_convo_words = self._config['conversation']['max_convo_words']
         self._max_memory_words = self._config['conversation']['max_memory_words']
         self._num_messages_per_request = self._config['conversation']['num_messages_per_request']
         self._context_path = self._config['conversation']['num_messages_per_request']
+        self._prefix = self._config["prefix"]
+        self._memory_match_prob = self._config["memory_match_prob"]
 
     @property
     def id_name_dict(self):
@@ -68,5 +70,13 @@ class Settings:
     @property
     def context_path(self):
         return self._context_path
+
+    @property
+    def prefix(self):
+        return self._prefix
+
+    @property
+    def memory_match_prob(self):
+        return self._memory_match_prob
 
 settings = Settings()

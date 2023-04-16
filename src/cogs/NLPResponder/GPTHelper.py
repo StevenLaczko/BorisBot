@@ -8,7 +8,6 @@ import pytz, datetime
 
 from src.helpers import DiscordBot
 from src.cogs.NLPResponder.BotResponse import BotResponse
-from src.cogs.NLPResponder.Conversation import Conversation
 from src.helpers.logging_config import logger
 import os
 
@@ -205,7 +204,7 @@ def getUserNameAndNick(user: discord.User, id_name_dict) -> (Union[None, str], s
     return name, user.name
 
 
-def getMessageStr(bot, message, id_name_dict, writeBotName=False):
+def getMessageStr(bot, message: discord.Message, id_name_dict, writeBotName=False):
     local_tz = pytz.timezone("America/New_York")
     local_timestamp = message.created_at.astimezone(local_tz)
     local_timestamp.strftime(DATETIME_FSTRING)
@@ -243,7 +242,7 @@ def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[
     return result
 
 
-def getContextGPTMix(bot, messages: list[discord.Message], conversation: Conversation, id_name_dict) -> list:
+def getContextGPTMix(bot, messages: list[discord.Message], conversation, id_name_dict) -> list:
     result = []
     chatlog_start = "```conversation_so_far\n"
     log_str = chatlog_start
@@ -412,25 +411,6 @@ async def getGPTPrompt(bot, message, message_context_list, conversation, memory_
     return prompt
 
 
-async def getGPTResponse(bot, message: discord.Message, message_context_list: list[discord.Message],
-                         conversation: Conversation,
-                         id_name_dict: dict,
-                         memory: list[str] = None,
-                         mood: str = "") -> BotResponse:
-    message_context_list.append(message)
-
-    logger.info(f"Getting GPT response for '{message.clean_content}'")
-    logger.debug(f"PROMPT:\n{prompt}")
-    response_str: str = promptGPT(prompt, TEMPERATURE, FREQ_PENALTY)["string"]
-    logger.debug(f"GPT response: `{response_str}`")
-
-    # todo
-    # if response["reason"] == "max_tokens":
-    #     print("ERROR: Tokens maxed out on prompt. Memories are getting too long.")
-
-    response = await parseGPTResponse(response_str)
-    return response
-
 
 def getMood(bot, message_context_list, memory, id_name_dict) -> str:
     chatlog = getContextGPTPlainMessages(bot, message_context_list, id_name_dict)
@@ -567,9 +547,6 @@ If you understand, type '.' once."""},
 def rememberGPT(bot, message_context_list, id_name_dict):
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
-
-    if memory is None:
-        memory = []
 
     remember_preprompt = [
         {"role": "system", "content": "You are a natural language processor. You follow instructions precisely."},

@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
     with open(SETTINGS_FILE, 'r') as f:
         settings = json.load(f)
-    bot = Boris.Boris(settings=settings)
+    bot = Boris.Boris(settings_path=settings)
     bot.run(TOKEN)
 
 

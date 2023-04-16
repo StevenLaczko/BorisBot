@@ -4,7 +4,7 @@ import pickle
 
 import hnswlib
 import numpy as np
-from Memory import Memory
+from src.cogs.NLPResponder.Memory import Memory
 from src.helpers.logging_config import logger
 
 DIM = 1536
@@ -41,7 +41,7 @@ def init_hnsw():
 
 
 class MemoryPool:
-    def __init__(self, memory_file_path=None, hnsw_file_path=None):
+    def __init__(self, memory_file_path=MEMORY_DICT_PATH, hnsw_file_path=HNSW_PKL_PATH):
         """
         MemoryPool() -> empty memory pool
         MemoryPool(path) -> loads pool from file at path
@@ -59,7 +59,7 @@ class MemoryPool:
             self.hnsw = init_hnsw()
             self.memories: dict[int, Memory] = {}
 
-    def get_similar(self, memory: Memory, k=5):
+    def get_similar(self, memory: Memory, k=5) -> tuple:
         labels, distances = self.hnsw.knn_query(memory, k=k, filter=None)
         return labels, distances
 

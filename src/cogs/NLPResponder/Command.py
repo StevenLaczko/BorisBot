@@ -1,15 +1,16 @@
 import abc
+from abc import ABC, abstractmethod
 
 
-class Command(metaclass=abc.ABCMeta):
-
-    @abc.abstractmethod
-    def _parse(self, input: str):
+class Command(ABC):
+    @abstractmethod
+    def _parse(self, command_input: str, **kwargs) -> list:
         pass
 
-    @abc.abstractmethod
-    def _execute(self, *args, **kwargs):
+    @abstractmethod
+    async def _execute(self, bot_brain, message, conversation, command_input, **kwargs):
         pass
 
-    def __call__(self, *args, **kwargs):
-        self._execute(args, kwargs)
+    async def execute(self, bot_brain, message, conversation, command_input, **kwargs):
+        inputs: list = self._parse(command_input, **kwargs)
+        return await self._execute(bot_brain, message, conversation, inputs, **kwargs)
