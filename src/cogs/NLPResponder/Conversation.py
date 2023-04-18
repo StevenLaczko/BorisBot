@@ -2,6 +2,7 @@ import datetime
 
 from src.cogs.NLPResponder.Context import Context
 from src.cogs.NLPResponder.ContextStack import ContextStack
+from threading import Lock
 
 
 class Conversation:
@@ -13,6 +14,7 @@ class Conversation:
         self.memory_pool = memory_pool
         self.mood: str = mood
         self.context_stack: ContextStack = context_stack if context_stack else self.init_context_stack()
+        self.mutex = Lock() # use with mutex: for getting replying so he doesn't reply to a bunch of stuff in a row
 
     def init_context_stack(self):
         return ContextStack(self.context_dict, self.memory_pool)
