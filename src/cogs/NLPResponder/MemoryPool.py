@@ -1,22 +1,47 @@
 import datetime
 import json
 import pickle
+from copy import deepcopy
 
 import hnswlib
 import numpy as np
 from src.cogs.NLPResponder.Memory import Memory
 from src.helpers.logging_config import logger
+from tqdm import tqdm
 
 DIM = 1536
 MAX_MEMORIES = 10000
 DISTANCE_FUNC = 'l2'
-#DISTANCE_FUNC = 'cosine'
+# DISTANCE_FUNC = 'cosine'
 EF = 20
 EF_CONSTRUCTION = 200
 M = 16
 
 HNSW_PKL_PATH = "data/hnsw.pkl"
-MEMORY_DICT_PATH = "data/memories_dict.pkl"
+
+
+# Custom encoder to serialize datetime objects
+class MemoryEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Memory):
+            d = deepcopy(obj.__dict__)
+            d["timestamp"] = obj.timestamp.isoformat()
+            return d
+        return super().default(obj)
+
+
+# Custom decoder to deserialize datetime objects
+def memory_decoder(obj):
+    if "embedding" in obj:
+        obj["timestamp"] = datetime.datetime.fromisoformat(obj["timestamp"])
+        m = Memory("", embedding=[])
+        m.__dict__.update(obj)
+        return m
+    else:
+        new_obj = {}
+        for k in obj.keys():
+            new_obj[int(k)] = obj[k]
+    return new_obj
 
 
 def init_hnsw():
@@ -40,8 +65,10 @@ def init_hnsw():
     return hnsw
 
 
+
+
 class MemoryPool:
-    def __init__(self, memory_file_path=MEMORY_DICT_PATH, hnsw_file_path=HNSW_PKL_PATH):
+    def __init__(self, memory_file_path="data/memories_dict.json", hnsw_file_path=HNSW_PKL_PATH, memory_list_init_path=None):
         """
         MemoryPool() -> empty memory pool
         MemoryPool(path) -> loads pool from file at path
@@ -51,17 +78,39 @@ class MemoryPool:
         self.hnsw_file_path = hnsw_file_path
         # Declaring index
         self.hnsw = None
-        self.memories: dict = {}
+        self.memories: dict[int, Memory] = {}
         try:
             self.load_memories()
         except Exception as e:
             logger.warning(f"Could not load memories. Initializing new memory pool.\nError: {e}")
             self.hnsw = init_hnsw()
-            self.memories: dict[int, Memory] = {}
+        if memory_list_init_path:
+            with open(memory_list_init_path, 'r') as f:
+                lines = f.read().split('\n')
+                lines = [l for l in lines if l != ""]
+                print(f"Loading init memories from {memory_list_init_path}.")
+                # If you want each memory to be a number of contiguous lines in the init file,
+                # this number controls how many extra lines are in the memory.
+                LINE_CONTEXT_LEN = 0
+                for i in tqdm(range(len(lines))):
+                    if i < LINE_CONTEXT_LEN:
+                        continue
+                    context_lines = lines[i-LINE_CONTEXT_LEN:i+1]
+                    line = '\n'.join(context_lines)
+                    self.add(Memory(line))
+                print("Done.")
 
-    def get_similar(self, memory: Memory, k=5) -> tuple:
-        labels, distances = self.hnsw.knn_query(memory, k=k, filter=None)
-        return labels, distances
+    def get_similar(self, vec: list, k=5) -> list:
+        _k = min(k, len(self.memories))
+        result = self.hnsw.knn_query(vec, k=_k, filter=None)
+        result = result[0].flatten(), result[1].flatten()
+        label_dist_list = list(zip(*result))
+        return label_dist_list
+
+    def get_similar_mem_ids(self, vec: list, k=5) -> list:
+        # turn this into a normal list
+        result = self.get_similar(vec, k=k)
+        return [x[0] for x in result]
 
     def get_memory(self, memory_id):
         return self.memories[memory_id]
@@ -74,7 +123,7 @@ class MemoryPool:
 
     def add(self, memory: Memory):
         self.memories[memory.id] = memory
-        m_arr = np.array([memory])
+        m_arr = np.array([memory.embedding])
         ids = np.array([memory.id])
         self.hnsw.add_items(m_arr, ids)
         self.save_memories()
@@ -83,13 +132,13 @@ class MemoryPool:
         with open(self.hnsw_file_path, 'wb') as f:
             pickle.dump(self.hnsw, f)
         with open(self.memory_file_path, 'w') as f:
-            json.dump(self.memories, f)
+            json.dump(self.memories, f, cls=MemoryEncoder)
 
     def load_memories(self):
         with open(self.hnsw_file_path, 'rb') as f:
             self.hnsw = pickle.load(f)
-        with open(self.memory_file_path, 'w') as f:
-            self.memories = json.load(f)
+        with open(self.memory_file_path, 'r') as f:
+            self.memories = json.load(f, object_hook=memory_decoder)
 
     def __setitem__(self, key, value):
         raise TypeError("Cannot use [] to set item in MemoryPool. Use add_memory(string).")
@@ -109,7 +158,7 @@ def demo():
     m.add(Memory("Whenever Steven compliments me, I wink", datetime.datetime.now()))
     m.add(Memory("Bouldering is awesome", datetime.datetime.now()))
     m.add(Memory("Kristian's shoes were eaten", datetime.datetime.now()))
-    labels, distances = m.get_similar(Memory("""Boris
+    labels_distances = m.get_similar(Memory("""Boris
     BOT
      — 04/09/2023 4:34 PM
     Oh yeah, I remember that! You were pretty impressed with my toki pona skills, weren't ya? I gotta say, it's a pretty neat language.
@@ -120,10 +169,8 @@ def demo():
      — 04/09/2023 4:35 PM
     Aw shucks, Steven, you're makin' me blush! I'm just doin' my best to impress ya.
     TenebumbilicalSeashanty — 04/09/2023 4:35 PM
-    Awwwww""", datetime.datetime.now()), 3)
+    Awwwww""").embedding, 3)
 
-    indices = np.argsort(distances, axis=1)[:, ::-1][0]
-    distances = distances[:, indices]
-    labels = labels[:, indices]
-    for i in range(labels.shape[1]):
-        print(f"{m.memories[labels[0, i]]}: {distances[0, i]}")
+    labels_distances = sorted(labels_distances, key=lambda x: x[1], reverse=True)
+    for t in labels_distances:
+        print(f"{m.memories[t[0]]}: {t[1]}")

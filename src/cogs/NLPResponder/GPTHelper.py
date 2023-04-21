@@ -198,7 +198,7 @@ def promptGPT(gptMessages, temperature=None, frequency_penalty=None, model=None)
 
 def getUserNameAndNick(user: discord.User, id_name_dict) -> (Union[None, str], str):
     try:
-        name = id_name_dict[str(user.id)]
+        name = id_name_dict[user.id]
     except KeyError:
         return None, user.name
     return name, user.name
@@ -384,7 +384,7 @@ async def parseGPTResponse(full_response_str) -> BotResponse:
     return BotResponse(full_response_str, response_str, new_mood=new_mood, new_memory=new_memory)
 
 
-def getEmbedding(string):
+def getEmbedding(string) -> list:
     dotenv.load_dotenv()
     openai.api_key = os.environ.get("OPENAI_API_KEY")
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"

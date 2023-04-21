@@ -38,6 +38,7 @@ class Settings:
         self._context_path = self._config['conversation']['num_messages_per_request']
         self._prefix = self._config["prefix"]
         self._memory_match_prob = self._config["memory_match_prob"]
+        self._opus = self._config["opus"]
 
     @property
     def id_name_dict(self):
@@ -78,5 +79,9 @@ class Settings:
     @property
     def memory_match_prob(self):
         return self._memory_match_prob
+
+    @property
+    def opus(self):
+        return self._opus
 
 settings = Settings()

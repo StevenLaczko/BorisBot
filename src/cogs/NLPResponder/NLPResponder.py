@@ -24,18 +24,18 @@ MAX_CONVO_WORDS = 200
 MEMORY_CHANCE = 1
 CONVO_END_DELAY = datetime.timedelta(minutes=10)
 ADD_COMMAND_REACTIONS = True
-MEMORY_FILENAME = "memories.json"
-
+MEMORY_FILEPATH = "data/memories_dict.json"
 
 # TODO Add undo (at least to addResponse)
 class NLPResponder(commands.Cog):
-    def __init__(self, bot: DiscordBot.DiscordBot, prefix, memory_filename=MEMORY_FILENAME):
+    def __init__(self, bot: DiscordBot.DiscordBot, prefix, memory_filepath=None, memory_list_init=None):
         self.bot = bot
         self.prefix: str = prefix
-        self.memory_file_path = DiscordBot.getFilePath(memory_filename)
+        self.memory_file_path = DiscordBot.getFilePath(memory_filepath)
         context_dir = "data/contexts/"
         c_files = ["main-context.json"]
-        self.bot_brain = BotBrain(self.bot, context_dir=context_dir, context_files=c_files, commands=BorisCommands.commands)
+        self.bot_brain = BotBrain(self.bot, context_dir=context_dir, context_files=c_files, commands=BorisCommands.commands, memory_file_path=memory_filepath, memory_list_init=memory_list_init)
+        self.vc = None
 
         # load memories
         if os.path.isfile(self.memory_file_path):
@@ -72,12 +72,12 @@ class NLPResponder(commands.Cog):
             await self.handle_response_situations(message, current_convo)
 
         for c in conversationsToStop:
-            await self.stopConversation(c)
+            await self.stop_conversation(c)
 
     async def handle_response_situations(self, message, conversation):
         mention_ids = [m.id for m in message.mentions]
         if "boris stop" in message.clean_content.lower():
-            await self.stopConversation(message.channel)
+            await self.stop_conversation(message.channel)
         elif isinstance(message.channel, discord.DMChannel):
             logger.info("Received message in DM")
             await self.replyToMessage(message, conversation)
@@ -97,15 +97,6 @@ class NLPResponder(commands.Cog):
         elif 0.05 > random.random():
             await self.replyToMessage(message, conversation)
 
-    async def stopConversation(self, channel, context: Context):
-        logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
-        self.bot_brain.currentConversations[channel.id] = None
-        if MEMORY_CHANCE > random.random():
-            chatlog_context = await self.getConvoContext(channel, after=None, ignore_list=self.bot.settings["ignore_list"])
-            await self.bot_brain.make_convo_memory(context, self.bot, chatlog_context)
-            await self.bot_brain.setMood(GPTAPI.getMood(self.bot, chatlog_context, self.bot_brain.getMemoriesFromStack("main"),
-                                                        self.bot.settings["id_name_dict"]))
-
     # COMMANDS
 
     @commands.command(name="remember", help="Remember.")
@@ -114,82 +105,23 @@ class NLPResponder(commands.Cog):
         await self.storeMemory(
             await self.getConvoContext(ctx.channel, after=None, ignore_list=self.bot.settings["ignore_list"]))
 
+    @commands.command(name="joinvc", help="Join a vc, give him an id")
+    async def join_vc(self, ctx, vc_id):
+        if vc_id is None:
+            vc: discord.VoiceChannel = await ctx.author.voice.channel
+        else:
+            vc: discord.VoiceChannel = await ctx.guild.get_channel(vc_id)
+        self.bot_brain.connect_to_vc(vc)
+
     # METHODS
 
-    async def stopConversation(self, channel):
+    async def stop_conversation(self, channel):
         if channel.type is discord.ChannelType.private:
             logger.info(
                 f"{CONVO_END_DELAY} passed. Ending convo in DM with {channel.recipient if channel.recipient else 'unknown user'}")
         else:
             logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
-
         self.bot_brain.currentConversations[channel.id] = None
-        if MEMORY_CHANCE > random.random():
-            context = await self.getConvoContext(channel, after=None, ignore_list=self.bot.settings["ignore_list"])
-            await self.storeMemory(context)
-            await self.setMood(context)
-
-
-    async def getConvoContext(self, channel, before=False,
-                              after: Union[discord.Message, datetime.datetime, None, bool] = False,
-                              max_context_words=None, ignore_list=None):
-        if not max_context_words:
-            max_context_words = self.bot.settings["max_context_words"]
-            if not max_context_words:
-                max_context_words = MAX_CONTEXT_WORDS
-        context = []
-        try:
-            message: discord.Message = [m async for m in channel.history(limit=2)][1]  # second to last message to start
-        except IndexError as e:
-            logger.error("Not enough messages in channel to get context.")
-            logger.error(e)
-            return []
-        if before is False:
-            before = message.created_at + datetime.timedelta(minutes=5)
-        try:
-            context = await self.getContext(channel, before=before, after=after,
-                                            max_context_words=max_context_words, ignore_list=ignore_list)
-        except Exception as e:
-            logger.error(e)
-        return context
-
-    async def saveMemory(self, _memory, shrink=True, _explain=True):
-        for m in self.memory:
-            isMatch, probability = await self.botMatchString(m, _memory)
-            if probability > 0.85:
-                close = m
-                logger.info(f"Not saving memory. Too close to {close}, probability {probability}")
-                return
-
-        local_tz = pytz.timezone("America/New_York")
-        local_timestamp = datetime.datetime.now(local_tz)
-        ts = local_timestamp.strftime(GPTAPI.DATETIME_FSTRING)
-        _memory = f"[{ts}] {_memory}"
-        logger.info(f"Saving new memory: {_memory}")
-        self.memory.append(_memory.lower())
-        if shrink:
-            self.memory = GPTAPI.organizeMemories(self.memory, self.bot.settings["max_context_words"], explain=_explain)
-        with open(self.memory_file_path, 'w+') as memoryFile:
-            (json.dump(self.memory, memoryFile, indent=0))
-
-    async def storeMemory(self, conversation_log):
-        _memory = GPTAPI.rememberGPT(self.bot, conversation_log, self.bot.settings["id_name_dict"], memory=self.memory)
-        if _memory != "" and _memory is not None:
-            logger.info(f"Storing memory `{_memory}")
-            await self.saveMemory(_memory)
-        else:
-            logger.info(f"Storing no memories from conversation of length {len(conversation_log)}")
-
-    async def setMood(self, conversation_log):
-        self.mood = GPTAPI.getMood(self, conversation_log, self.memory, self.bot.settings["id_name_dict"])
-        logger.info(f"Setting mood from convo to {self.mood}")
-
-    async def parseGPTResponse(self, bot_response: BotResponse):
-        return bot_response.response_str if bot_response.response_str else ""
-
-    # pool is a memory pool. It can be a string for one pool, or a list of pools
-    async def replyGPT(self, message, conversation: Conversation, max_context_words=None, _memory=None, _mood=None):
-        pass
 
     async def replyToMessage(self, message, conversation):
         logger.info("Responding")

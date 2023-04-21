@@ -1,3 +1,5 @@
+import asyncio
+import io
 import json
 import os
 from datetime import datetime
@@ -28,6 +30,7 @@ class BotBrain:
                  context_files=None,
                  commands=None,
                  memory_file_path="data/memories_dict.json",
+                 memory_list_init=None,
                  hnsw_file_path="data/hnsw.pkl"):
         self.bot: DiscordBot = bot
         self.memory_file_path = memory_file_path
@@ -38,21 +41,24 @@ class BotBrain:
         self.currentConversations: dict[int, Union[Conversation, None]] = {}
         self._memory_pool: MemoryPool = MemoryPool(
             memory_file_path=self.memory_file_path,
+            memory_list_init_path=memory_list_init,
             hnsw_file_path=self.hnsw_file_path
         )
         self.contexts: dict[str, Context] = self.load_contexts()
+        self.vc_task: Union[asyncio.Task, None] = None
 
     def load_contexts(self) -> dict[str, Context]:
         contexts = {}
         for path in self.context_files:
             c_path = os.path.join(self.contexts_dir, path)
-            with open(c_path, 'r') as f:
-                new_context = self.create_context_from_json(json.load(f), self.commands)
-                contexts[new_context.name] = new_context
+            new_context = self.create_context_from_json(c_path, self.commands)
+            contexts[new_context.name] = new_context
         return contexts
 
-    def create_context_from_json(self, context_dict, command_funcs):
-        return Context(self._memory_pool, context_dict=context_dict, command_funcs=command_funcs)
+    def create_context_from_json(self, filepath, command_funcs):
+        with open(filepath, 'r') as f:
+            context_dict = json.load(f)
+        return Context(self._memory_pool, json_filepath=filepath, context_dict=context_dict, command_funcs=command_funcs)
 
     def create_conversation(self, channel):
         new_conversation = Conversation(channel, self._memory_pool, context_dict=self.contexts)
@@ -66,23 +72,26 @@ class BotBrain:
                     _memory=None,
                     _mood=None):
 
-        if not max_context_words:
-            max_context_words = settings.max_context_words
-        if not _memory:
-            _memory = self.get_memories_string(conversation)
         if not _mood:
             _mood = conversation.mood
+        if not max_context_words:
+            max_context_words = settings.max_context_words
 
         chatlog_context = await DiscordHelper.getContext(message.channel,
                                                          message,
                                                          bot=self.bot,
                                                          max_context_words=max_context_words)
         chatlog_context.append(message)
+        if not _memory:
+            _memory = self.get_memories_string(conversation,
+                                               context_string=GPTHelper.getContextGPTPlainMessages(self.bot,
+                                                                                                   chatlog_context,
+                                                                                                   settings.id_name_dict))
         gpt_chatlog: list = GPTHelper.getContextGPTMix(self.bot, chatlog_context, conversation, settings.id_name_dict)
+        #dynamic_prompt = ##### TODO
         prompt: Prompt = conversation.get_prompt(message, conversation)
         async with message.channel.typing():
             bot_response: BotResponse = self.getBotResponse(prompt.get_prompt(), gpt_chatlog)
-
         returns = await conversation.context_stack.execute_commands(self, message, conversation, bot_response.commands)
         for r in returns:
             if r[0] == "RESPOND":
@@ -102,17 +111,26 @@ class BotBrain:
             return self.currentConversations[message.channel.id]
         return None
 
-    def get_memories_string(self, conversation: Conversation):
+    def get_memories_string(self, conversation: Conversation, context_string: str = None):
         memory_ids = conversation.context_stack.get_memory_ids()
+        context_memories = None
+        if context_string:
+            candidate_context_memories_ids = self._memory_pool.get_similar_mem_ids(GPTHelper.getEmbedding(context_string), k=3)
+            context_memory_ids = []
+            memory_id_dict = {x: 0 for x in memory_ids}
+            for x in candidate_context_memories_ids:
+                if x not in memory_id_dict:
+                    context_memory_ids.append(x)
+            context_memories = self._memory_pool.get_strings(context_memory_ids)
+            logger.info(f"Contextual memories:\n{context_memories}")
         memory_strings = self._memory_pool.get_strings(memory_ids)
-        if len(memory_strings) == 0:
-            return ""
-        else:
-            newline_memories = '\n'.join(memory_strings)
-            return f"```memories\n{newline_memories}\n```"
+        if context_memories:
+            memory_strings.extend(context_memories)
+        newline_memories = '\n'.join(memory_strings)
+        return f"```memories\n{newline_memories}\n```" if len(memory_strings) > 0 else ""
 
     def get_memories_related(self, memory: Memory):
-        self._memory_pool.get_similar(memory)
+        self._memory_pool.get_similar(memory.embedding)
 
     def get_memory_list(self):
         pass
@@ -121,13 +139,16 @@ class BotBrain:
         m = Memory(mem_str)
         if not memory_match_prob:
             memory_match_prob = settings.memory_match_prob
-        similar_mem_labels_distances: tuple = self._memory_pool.get_similar(m, 1)
-        m_id = similar_mem_labels_distances[0][0]
-        similar_mem: Memory = self._memory_pool.memories[m_id]
-        similarity = similar_mem_labels_distances[1][0]
-        if similarity > memory_match_prob:
-            logger.info(f"Not saving memory. Too close to {similar_mem.string}, similarity {similarity}")
-            return
+        m_id_dist_list = self._memory_pool.get_similar(m.embedding, 1)
+        m_id = None
+        similarity = None
+        if len(m_id_dist_list) > 0:
+            m_id = m_id_dist_list[0][0]
+            similarity = m_id_dist_list[0][1]
+            similar_mem: Memory = self._memory_pool.memories[m_id]
+            if similarity > memory_match_prob:
+                logger.info(f"Not saving memory. Too close to {similar_mem.string}, similarity {similarity}")
+                return
         self._memory_pool.add(m)
         conversation.context_stack.add_memory(m.id)
 
@@ -152,3 +173,27 @@ class BotBrain:
 
     def setMood(self, context: Context, mood: str):
         context.mood = mood
+
+    def vc_disconnect(self):
+        self.vc_task.cancel()
+
+    def vc_callback(self, data):
+        self.audio_retrieve_start = datetime.now()
+        # Decode the Opus data to PCM
+        pcm_data, _ = discord.opus.decode(data, 3840)
+
+        # Process the PCM data as needed
+        # For example, write it to a file using soundfile
+        f = io.BytesIO(pcm_data)
+        from pydub import AudioSegment
+        AudioSegment.from_file(f, format='WAV')
+
+        # Do something with the WAV data, such as sending it to a speech-to-text API
+        text = GPTHelper.speech_to_text(wav_bytes)
+
+    async def connect_to_vc(self, vc: discord.VoiceChannel):
+        discord.opus.load_opus(settings.opus)
+        vc_con = await vc.connect()
+        loop = asyncio.get_event_loop()
+        self.vc_task = loop.create_task(vc_con.listen(self.vc_callback))
+

@@ -24,21 +24,21 @@ def fnv1a_32(s: bytes) -> int:
     return hash_value & 0xffffffff
 
 
-def get_32_int_guid():
+def get_32_int_guid() -> int:
     # convert the UUID to a SHA-256 hash digest, then to an int
     my_uuid = str(uuid.uuid4()).encode('utf-8')
     uuid_int = fnv1a_32(my_uuid)
     return uuid_int
 
 
-class Memory:
-    def __init__(self, string, timestamp=None, embedding=None):
-        self.string = string
-        self.timestamp = timestamp if timestamp else datetime.datetime.now()
-        self.embedding = embedding if embedding is not None else self.get_embedding()
-        self.id = get_32_int_guid()
+class Memory():
+    def __init__(self, string, timestamp=None, embedding=None, mem_id=None):
+        self.string: str = string.strip()
+        self.timestamp: datetime.datetime = timestamp if timestamp else datetime.datetime.now()
+        self.embedding: list = embedding if embedding is not None else self.get_embedding()
+        self.id: int = mem_id if mem_id else get_32_int_guid()
 
-    def get_embedding(self):
+    def get_embedding(self) -> list:
         return getEmbedding(self.string)
 
     def __len__(self):

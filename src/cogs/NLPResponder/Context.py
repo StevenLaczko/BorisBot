@@ -1,9 +1,13 @@
+import json
+
 from ordered_set import OrderedSet
 
+MAX_MEMORIES = 8
 
 class Context:
-    def __init__(self, memory_pool, name=None, context_dict=None, command_funcs=None, prompts=None, memory=None, triggers=None, mood=None):
+    def __init__(self, memory_pool, name=None, json_filepath=None, context_dict=None, command_funcs=None, prompts=None, memory=None, triggers=None, mood=None):
         self.name = name
+        self.json_filepath = json_filepath
         self.memory_pool = memory_pool
         self.prompts = prompts
         self._memory: OrderedSet = OrderedSet(memory) if memory else OrderedSet()
@@ -38,8 +42,22 @@ class Context:
                     self.commands[dict_name] = f
                     break
 
+        self._memory.update(d["MEMORY_IDS"])
+
     def get_memory_ids(self):
         return self._memory
 
+    def save_to_contextfile(self):
+        with open(self.json_filepath, 'r') as f:
+            obj = json.load(f)
+        obj["MEMORY_IDS"] = list(self._memory)
+        with open(self.json_filepath, 'w') as f:
+            json.dump(obj, f, indent=4)
+
+
     def add_memory(self, mem_id):
         self._memory.add(mem_id)
+        # TODO replace this with giving memories scores based on usefulness (similarity to boris response)
+        if len(self._memory) > MAX_MEMORIES:
+            self._memory.pop(len(self._memory)-1)
+        self.save_to_contextfile()

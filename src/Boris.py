@@ -21,7 +21,7 @@ REMINDER_FILE_NAME = "reminders.pkl"
 MESSAGE_FLAG = "-m"
 
 # NLPResponder
-MEMORY_FILE_PATH = "data/memories.json"
+MEMORY_FILE_PATH = "data/memories_dict.json"
 
 EXTENSIONS = [
     "src.BorisCommands"
@@ -47,7 +47,7 @@ class Boris(DiscordBot.DiscordBot):
 
     async def add_default_cogs(self):
         await self.add_cogs([
-            NLPResponder.NLPResponder(self, BOT_PREFIX, memory_filename=MEMORY_FILE_PATH),
+            NLPResponder.NLPResponder(self, BOT_PREFIX, memory_filepath=MEMORY_FILE_PATH, memory_list_init=None),
             Respondtron.Respondtron(self),
             MemeGrabber.MemeGrabber(self),
             ReminderCog.ReminderCog(self, REMINDER_FILE_NAME, MESSAGE_FLAG)
