@@ -4,11 +4,11 @@ from abc import ABC, abstractmethod
 
 class Command(ABC):
     @abstractmethod
-    def _parse(self, command_input: str, **kwargs) -> list:
+    def _parse(self, command_input: list, **kwargs) -> list:
         pass
 
     @abstractmethod
-    async def _execute(self, bot_brain, message, conversation, command_input, **kwargs):
+    async def _execute(self, bot_brain, message, conversation, command_inputs: list, **kwargs):
         pass
 
     async def execute(self, bot_brain, message, conversation, command_input, **kwargs):

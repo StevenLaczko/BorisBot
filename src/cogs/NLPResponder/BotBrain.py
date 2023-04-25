@@ -8,12 +8,12 @@ from typing import Union
 import discord
 
 from src.cogs.NLPResponder import GPTHelper, DiscordHelper, GPTHelper
-from src.cogs.NLPResponder.BotResponse import BotResponse
+from src.cogs.NLPResponder.MemoryManager import MemoryManager
+from src.cogs.NLPResponder.BotCommands import BotCommands
 from src.cogs.NLPResponder.Context import Context
 from src.cogs.NLPResponder.ContextStack import ContextStack
-from src.cogs.NLPResponder.Memory import Memory
+from src.cogs.NLPResponder.Memory import Memory, cosine_similarity
 from src.cogs.NLPResponder.Prompt import Prompt
-from src.helpers import StringMatchHelp
 from src.helpers.Settings import settings
 import logging
 
@@ -33,19 +33,17 @@ class BotBrain:
                  memory_list_init=None,
                  hnsw_file_path="data/hnsw.pkl"):
         self.bot: DiscordBot = bot
-        self.memory_file_path = memory_file_path
         self.contexts_dir = context_dir
         self.context_files = context_files
         self.commands = commands
         self.hnsw_file_path = hnsw_file_path
         self.currentConversations: dict[int, Union[Conversation, None]] = {}
-        self._memory_pool: MemoryPool = MemoryPool(
-            memory_file_path=self.memory_file_path,
-            memory_list_init_path=memory_list_init,
-            hnsw_file_path=self.hnsw_file_path
-        )
+        self.memory_manager: MemoryManager = MemoryManager(memory_file_path, hnsw_file_path,
+                                                           memory_list_init=memory_list_init,
+                                                           context_files=context_files)
         self.contexts: dict[str, Context] = self.load_contexts()
         self.vc_task: Union[asyncio.Task, None] = None
+        self.mood: str = ""
 
     def load_contexts(self) -> dict[str, Context]:
         contexts = {}
@@ -58,10 +56,11 @@ class BotBrain:
     def create_context_from_json(self, filepath, command_funcs):
         with open(filepath, 'r') as f:
             context_dict = json.load(f)
-        return Context(self._memory_pool, json_filepath=filepath, context_dict=context_dict, command_funcs=command_funcs)
+        return Context(self.memory_manager, json_filepath=filepath, context_dict=context_dict,
+                       command_funcs=command_funcs)
 
     def create_conversation(self, channel):
-        new_conversation = Conversation(channel, self._memory_pool, context_dict=self.contexts)
+        new_conversation = Conversation(channel, self.memory_manager, context_dict=self.contexts)
         self.currentConversations[channel.id] = new_conversation
         return new_conversation
 
@@ -69,110 +68,136 @@ class BotBrain:
                     message: discord.Message,
                     conversation: Conversation,
                     max_context_words=None,
-                    _memory=None,
+                    convo_memories=None,
                     _mood=None):
-
         if not _mood:
-            _mood = conversation.mood
+            _mood = self.mood
         if not max_context_words:
             max_context_words = settings.max_context_words
 
+        conversation.users[message.author.id] = True
+        conversation.num_msg_since_response = 0
+
+        # get chatlog
         chatlog_context = await DiscordHelper.getContext(message.channel,
                                                          message,
                                                          bot=self.bot,
                                                          max_context_words=max_context_words)
         chatlog_context.append(message)
-        if not _memory:
-            _memory = self.get_memories_string(conversation,
-                                               context_string=GPTHelper.getContextGPTPlainMessages(self.bot,
-                                                                                                   chatlog_context,
-                                                                                                   settings.id_name_dict))
-        gpt_chatlog: list = GPTHelper.getContextGPTMix(self.bot, chatlog_context, conversation, settings.id_name_dict)
-        #dynamic_prompt = ##### TODO
-        prompt: Prompt = conversation.get_prompt(message, conversation)
-        async with message.channel.typing():
-            bot_response: BotResponse = self.getBotResponse(prompt.get_prompt(), gpt_chatlog)
-        returns = await conversation.context_stack.execute_commands(self, message, conversation, bot_response.commands)
-        for r in returns:
-            if r[0] == "RESPOND":
-                conversation.bot_messageid_response[r[1].id] = bot_response.full_response
+        gpt_chatlog: list = GPTHelper.getContextGPTMix(self.bot,
+                                                       chatlog_context,
+                                                       conversation,
+                                                       settings.id_name_dict,
+                                                       write_timestamp_for_bot=False,
+                                                       bot_name="Response")
+        #gpt_chatlog = GPTHelper.getContextGPTPlainMessages(self.bot, chatlog_context, settings.id_name_dict, markdown=False)
+        #gpt_chatlog = "\n\nConversation:\n" + gpt_chatlog
 
-    def getBotResponse(self, prompt: str, gpt_chatlog: list, temperature=None, freq_pen=None, model=None):
-        gpt_input = GPTHelper.buildGPTMessageLog(prompt, *gpt_chatlog)
+        # get memories
+        context_memories = self.memory_manager.get_context_memories(
+            GPTHelper.getContextGPTPlainMessages(self.bot, chatlog_context, settings.id_name_dict),
+            conversation=conversation)
+        if not convo_memories:
+            convo_memories = self.memory_manager.get_memories_from_ids(conversation.get_memory_ids())
+        convo_memories.extend(context_memories)
+        memory_str = self.memory_manager.get_memories_string(convo_memories)
+
+
+        # get prompt, build llm inputs
+        prompt: Prompt = conversation.get_prompt(message, conversation)
+        dynamic_prompts = {
+            "CONVERSATION_INFO": GPTHelper.getMessageableString(conversation.channel, settings.id_name_dict),
+            "TIME_INFO": GPTHelper.getCurrentTimeString(),
+            "MEMORY": memory_str,
+            "GOAL_INFO": f"Current goal: {conversation.goal}" if conversation.goal else "Current goal: None"
+        }
+        bot_inputs = [prompt.get_prompt(dynamic_prompts)]
+        bot_inputs.extend(gpt_chatlog)
+
+        bot_commands: BotCommands = self.getBotCommands(bot_inputs)
+        logger.debug(f"Full response:\n{bot_commands.full_response}")
+
+        response_str = bot_commands.commands["RESPOND"][0]
+        response_embed = GPTHelper.getEmbedding(response_str) if "RESPOND" in bot_commands.commands else None
+        await self.execute_bot_commands(message, conversation, bot_commands,
+                                        response_str=response_str,
+                                        response_embed=response_embed,
+                                        full_response=bot_commands.full_response)
+
+        self.add_contextual_memory_if_best(convo_memories, context_memories, response_embed, conversation, bot_commands)
+
+    def add_contextual_memory_if_best(self, convo_memories, context_memories, response_embed, conversation, bot_commands):
+        if "RESPOND" not in bot_commands.commands or not response_embed:
+            return
+
+        best_memory = None
+        best_score = 0
+        for m in convo_memories:
+            sim = cosine_similarity(response_embed, m.embedding)
+            if sim > best_score:
+                best_memory = m
+                best_score = sim
+            # auto fix memories not already scored
+            self.verify_and_fix_memory(m, response_embed, conversation)
+
+        if best_memory in context_memories:
+            conversation.context_stack.add_memory_to_contexts(best_memory)
+            logger.info(
+                f"This context memory was relevant enough to be added to short-term memory:\n{str(best_memory)}")
+
+    def verify_and_fix_memory(self, m: Memory, response_embed: list, conversation: Conversation):
+        mem_changed = False
+        before = m.string
+        m.string = m.string.strip(' \n')
+        if before != m.string:
+            mem_changed = True
+        if m.score == 0:
+            self.memory_manager.update_mem_score_from_response_embed(response_embed, m)
+            mem_changed = True
+        if mem_changed:
+            self.memory_manager.save_memories_to_json()
+
+    async def execute_bot_commands(self, message, conversation, bot_commands, **kwargs):
+        # TODO this kwarg stuff is gross, fix. maybe have commands take kwargs.
+        response_embed_key = "response_embed"
+        response_embed = None
+        if response_embed_key in kwargs:
+            response_embed = kwargs[response_embed_key]
+
+        for c_name in bot_commands.commands:
+            bot_commands.commands[c_name].append(kwargs)
+
+        returns: dict = await conversation.execute_commands(self, message, bot_commands.commands)
+        for command_name in returns.keys():
+            if command_name == "RESPOND":
+                bot_msg_id = returns[command_name].id
+                conversation.replace_conversation_msg_by_id(bot_msg_id, bot_commands.full_response)
+            if command_name == "MOOD":
+                pass
+                # await self.bot.change_presence(status=returns[c_name])
+                # TODO discord.ActivityType.listening
+
+    def get_message_conversation(self, message: discord.Message):
+        if message.channel.id in self.currentConversations:
+            return self.currentConversations[message.channel.id]
+        return None
+
+    def is_message_in_conversation(self, message: discord.Message, conversation: Conversation):
+        conversation.has_message(message)
+
+    def getBotCommands(self, inputs: list, temperature=None, freq_pen=None, model=None):
+        # gpt_chatlog is a list of
+        #   dict openai json messages,
+        #   strings (which will be user messages),
+        #   or another list of one of the above
+        gpt_input = GPTHelper.buildGPTMessageLog(*inputs)
+        logger.debug(f"{inputs}")
         response_str = GPTHelper.promptGPT(gpt_input, temperature, freq_pen, model)["string"]
-        return BotResponse(response_str)
+        return BotCommands(response_str)
 
     def startConversation(self, channel: Union[discord.DMChannel, discord.TextChannel],
                           message_list: list[discord.Message], user_ids=None):
         self.currentConversations[channel.id] = Conversation(channel, timestamp=datetime.now())
-
-    def isMessageInConversation(self, message: discord.Message):
-        if message.channel.id in self.currentConversations and self.currentConversations[message.channel.id]:
-            return self.currentConversations[message.channel.id]
-        return None
-
-    def get_memories_string(self, conversation: Conversation, context_string: str = None):
-        memory_ids = conversation.context_stack.get_memory_ids()
-        context_memories = None
-        if context_string:
-            candidate_context_memories_ids = self._memory_pool.get_similar_mem_ids(GPTHelper.getEmbedding(context_string), k=3)
-            context_memory_ids = []
-            memory_id_dict = {x: 0 for x in memory_ids}
-            for x in candidate_context_memories_ids:
-                if x not in memory_id_dict:
-                    context_memory_ids.append(x)
-            context_memories = self._memory_pool.get_strings(context_memory_ids)
-            logger.info(f"Contextual memories:\n{context_memories}")
-        memory_strings = self._memory_pool.get_strings(memory_ids)
-        if context_memories:
-            memory_strings.extend(context_memories)
-        newline_memories = '\n'.join(memory_strings)
-        return f"```memories\n{newline_memories}\n```" if len(memory_strings) > 0 else ""
-
-    def get_memories_related(self, memory: Memory):
-        self._memory_pool.get_similar(memory.embedding)
-
-    def get_memory_list(self):
-        pass
-
-    async def save_memory(self, mem_str: str, conversation: Conversation, memory_match_prob: float = None, shrink=True, explain=True):
-        m = Memory(mem_str)
-        if not memory_match_prob:
-            memory_match_prob = settings.memory_match_prob
-        m_id_dist_list = self._memory_pool.get_similar(m.embedding, 1)
-        m_id = None
-        similarity = None
-        if len(m_id_dist_list) > 0:
-            m_id = m_id_dist_list[0][0]
-            similarity = m_id_dist_list[0][1]
-            similar_mem: Memory = self._memory_pool.memories[m_id]
-            if similarity > memory_match_prob:
-                logger.info(f"Not saving memory. Too close to {similar_mem.string}, similarity {similarity}")
-                return
-        self._memory_pool.add(m)
-        conversation.context_stack.add_memory(m.id)
-
-    def getMemories(self) -> list[str]:
-        return [m.string for m in self._memory_pool.memories.values()]
-
-    def getMemoriesFromStack(self, stack: ContextStack) -> list[Memory]:
-        return [self._memory_pool.memories[x] for x in stack.get_memory_ids()]
-
-    def getMemoryPools(self, pools: list[str]) -> list[Context]:
-        result = []
-        for p in pools:
-            if p not in self.contexts:
-                logging.error(f"Pool {p} does not exist in bot memory.")
-            else:
-                result.append(self.contexts[p])
-        return result
-
-    def setMoodFromConvo(self, pool, conversation_log):
-        self.mood = GPTHelper.getMood(self, conversation_log, self.contexts[pool].memories)
-        logging.info(f"Setting mood from convo in context {pool} to {self.mood}")
-
-    def setMood(self, context: Context, mood: str):
-        context.mood = mood
 
     def vc_disconnect(self):
         self.vc_task.cancel()
@@ -196,4 +221,3 @@ class BotBrain:
         vc_con = await vc.connect()
         loop = asyncio.get_event_loop()
         self.vc_task = loop.create_task(vc_con.listen(self.vc_callback))
-

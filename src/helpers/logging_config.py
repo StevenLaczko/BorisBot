@@ -13,7 +13,7 @@ elif settings["log_level"] == "debug":
 logger = logging.getLogger("main")
 logger.setLevel(log_level)
 # Create a rotating file handler
-handler = RotatingFileHandler(filename=f'logs/boris.log', maxBytes=10000, backupCount=5)
+handler = RotatingFileHandler(filename=f'logs/boris.log', maxBytes=20000, backupCount=5)
 # Set the log level
 handler.setLevel(log_level)
 # Create a formatter and add it to the handler

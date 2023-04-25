@@ -7,7 +7,7 @@ import openai
 import pytz, datetime
 
 from src.helpers import DiscordBot
-from src.cogs.NLPResponder.BotResponse import BotResponse
+from src.cogs.NLPResponder.BotCommands import BotCommands
 from src.helpers.logging_config import logger
 import os
 
@@ -172,7 +172,8 @@ Joyful because Boris was finally able to finish his crossword puzzle
 """
 
 TEMPERATURE = 2
-FREQ_PENALTY = 2
+FREQ_PENALTY = 1
+PRES_PENALTY = 1
 REMEMBER_TEMPERATURE = 0
 REMEMBER_FREQ_PENALTY = 0
 MEMORY_WORD_COUNT_MAX = 300
@@ -204,17 +205,24 @@ def getUserNameAndNick(user: discord.User, id_name_dict) -> (Union[None, str], s
     return name, user.name
 
 
-def getMessageStr(bot, message: discord.Message, id_name_dict, writeBotName=False):
+def getMessageStr(bot, message: discord.Message, id_name_dict, writeBotName=False, write_timestamp_for_bot=True, bot_name=None):
     local_tz = pytz.timezone("America/New_York")
     local_timestamp = message.created_at.astimezone(local_tz)
-    local_timestamp.strftime(DATETIME_FSTRING)
+    local_timestamp = local_timestamp.strftime(DATETIME_FSTRING)
     if writeBotName or bot.user.id != message.author.id:
-        name, nick_str = getUserNameAndNick(message.author, id_name_dict)
+        if bot.user.id == message.author.id and bot_name:
+            name = None
+            nick_str = bot_name
+        else:
+            name, nick_str = getUserNameAndNick(message.author, id_name_dict)
         # if bot.user.id == message.author.id:
         #     result = f"You: {message.clean_content}"
         # else:
-        name_str = f"{name} (AKA {nick_str})" if name else nick_str
-        result = f"{name_str} ({local_timestamp}): {message.clean_content}"
+        name_str = f"{name} (aka {nick_str})" if name else nick_str
+        if write_timestamp_for_bot:
+            result = f"{name_str} ({local_timestamp}): {message.clean_content}"
+        else:
+            result = f"{name_str}: {message.clean_content}"
     else:
         result = message.clean_content
 
@@ -242,9 +250,9 @@ def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[
     return result
 
 
-def getContextGPTMix(bot, messages: list[discord.Message], conversation, id_name_dict) -> list:
+def getContextGPTMix(bot, messages: list[discord.Message], conversation, id_name_dict, write_timestamp_for_bot=True, bot_name=None) -> list:
     result = []
-    chatlog_start = "```conversation_so_far\n"
+    chatlog_start = "```chatlog\n"
     log_str = chatlog_start
     LEN_ASSISTANT_MESSAGES = 10
 
@@ -257,7 +265,12 @@ def getContextGPTMix(bot, messages: list[discord.Message], conversation, id_name
             log_str = chatlog_start
             result.append(createGPTMessage(response_log[m.id], Role.ASSISTANT))
         else:
-            log_str += getMessageStr(bot, m, id_name_dict, writeBotName=True) + '\n'
+            log_str += getMessageStr(bot,
+                                     m,
+                                     id_name_dict,
+                                     writeBotName=True,
+                                     write_timestamp_for_bot=write_timestamp_for_bot,
+                                     bot_name=bot_name) + '\n'
 
     if len(log_str) != chatlog_start:
         log_str += "```"
@@ -266,13 +279,13 @@ def getContextGPTMix(bot, messages: list[discord.Message], conversation, id_name
     return result
 
 
-def getContextGPTPlainMessages(bot, messages: list[discord.Message], id_name_dict) -> str:
-    result_str = "```Chatlog\n"
+def getContextGPTPlainMessages(bot, messages: list[discord.Message], id_name_dict, markdown=True) -> str:
+    result_str = "```chatlog\n" if markdown else ""
 
     for m in messages:
         result_str += getMessageStr(bot, m, id_name_dict, writeBotName=True) + '\n'
 
-    result_str += "```"
+    result_str += "```" if markdown else ""
     return result_str
 
 
@@ -352,7 +365,7 @@ def appendToCommand(new_line, cmd, cmd_str):
     return cmd_str
 
 
-async def parseGPTResponse(full_response_str) -> BotResponse:
+async def parseGPTResponse(full_response_str) -> BotCommands:
     response_split = full_response_str.split('\n')
     response_str = ""
     new_mood = new_memory = ""
@@ -381,7 +394,7 @@ async def parseGPTResponse(full_response_str) -> BotResponse:
                 r = r[len("Boris:"):].strip()
             response_str = r
 
-    return BotResponse(full_response_str, response_str, new_mood=new_mood, new_memory=new_memory)
+    return BotCommands(full_response_str, response_str, new_mood=new_mood, new_memory=new_memory)
 
 
 def getEmbedding(string) -> list:

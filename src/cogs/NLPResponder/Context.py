@@ -2,18 +2,23 @@ import json
 
 from ordered_set import OrderedSet
 
-MAX_MEMORIES = 8
+from src.cogs.NLPResponder.Memory import Memory
+from src.cogs.NLPResponder.MemoryPool import MemoryPool
+from src.helpers.logging_config import logger
+
+MAX_MEMORIES = 6
+
 
 class Context:
-    def __init__(self, memory_pool, name=None, json_filepath=None, context_dict=None, command_funcs=None, prompts=None, memory=None, triggers=None, mood=None):
+    def __init__(self, memory_manager, name=None, json_filepath=None, context_dict=None, command_funcs=None, prompts=None,
+                 memory=None, triggers=None):
         self.name = name
         self.json_filepath = json_filepath
-        self.memory_pool = memory_pool
+        self.memory_manager = memory_manager
         self.prompts = prompts
         self._memory: OrderedSet = OrderedSet(memory) if memory else OrderedSet()
         self._triggers = triggers
         self.commands: dict = None
-        self.mood = mood
         if context_dict:
             self.init_context(context_dict, command_funcs)
 
@@ -54,10 +59,18 @@ class Context:
         with open(self.json_filepath, 'w') as f:
             json.dump(obj, f, indent=4)
 
+    def prune_memories(self, num_remove, max_memories=MAX_MEMORIES):
+        if len(self._memory) <= max_memories:
+            logger.debug(f"Context '{self.name}': {len(self._memory)}, max: {max_memories}")
+            return
+        m_list: list[Memory] = self.memory_manager.get_memories_from_ids(self._memory)
+        m_list_sorted: list[Memory] = sorted(m_list, key=lambda x: x.score)
+        removed_mem_str = '\n'.join([str(x) for x in m_list_sorted[:num_remove]])
+        logger.info(f"Context '{self.name}': Pruning {num_remove} memories:\n{removed_mem_str}")
+        for m in m_list_sorted[:num_remove]:
+            self._memory.remove(m.id)
 
-    def add_memory(self, mem_id):
-        self._memory.add(mem_id)
-        # TODO replace this with giving memories scores based on usefulness (similarity to boris response)
-        if len(self._memory) > MAX_MEMORIES:
-            self._memory.pop(len(self._memory)-1)
+    def add_memory(self, mem):
+        self._memory.add(mem.id)
+        self.prune_memories(3)
         self.save_to_contextfile()

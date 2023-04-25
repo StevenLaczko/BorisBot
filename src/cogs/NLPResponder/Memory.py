@@ -1,7 +1,10 @@
 import datetime
+import math
 import uuid
 
+from src.cogs.NLPResponder import GPTHelper
 from src.cogs.NLPResponder.GPTHelper import getEmbedding
+from src.helpers.logging_config import logger
 
 
 def fnv1a_32(s: bytes) -> int:
@@ -31,15 +34,37 @@ def get_32_int_guid() -> int:
     return uuid_int
 
 
-class Memory():
+def cosine_similarity(v1, v2):
+    """Returns the cosine similarity between two vectors"""
+    dot_product = sum(x * y for x, y in zip(v1, v2))
+    magnitude_v1 = math.sqrt(sum(x ** 2 for x in v1))
+    magnitude_v2 = math.sqrt(sum(x ** 2 for x in v2))
+    return dot_product / (magnitude_v1 * magnitude_v2)
+
+
+def update_mem_scores(response_embed, memories: list):
+    [m.update_memory_score_from_response_embedding(response_embed) for m in memories]
+    logger.info("Memory scores updated:")
+    [logger.info(f"{m.score} - {m.string}") for m in memories]
+
+
+class Memory:
     def __init__(self, string, timestamp=None, embedding=None, mem_id=None):
         self.string: str = string.strip()
         self.timestamp: datetime.datetime = timestamp if timestamp else datetime.datetime.now()
-        self.embedding: list = embedding if embedding is not None else self.get_embedding()
+        self.embedding: list = embedding if embedding is not None else self.generate_embedding()
         self.id: int = mem_id if mem_id else get_32_int_guid()
+        self.score: float = 0
 
-    def get_embedding(self) -> list:
-        return getEmbedding(self.string)
+    def update_memory_score_from_response_embedding(self, response_embed: list):
+        sim = cosine_similarity(self.embedding, response_embed)
+        self.score += sim
+        self.score /= 2
+
+    def generate_embedding(self) -> list:
+        e = getEmbedding(self.string)
+        self.embedding = e
+        return self.embedding
 
     def __len__(self):
         return len(self.embedding)
@@ -48,4 +73,4 @@ class Memory():
         return self.embedding[i]
 
     def __repr__(self):
-        return f"{self.embedding[0:3]}... [{self.timestamp}]: {self.string}`"
+        return f"'{self.string}', timestamp: {self.timestamp}, score: {self.score}, embedding: {self.embedding[0:2]}..."

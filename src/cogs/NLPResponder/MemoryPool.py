@@ -44,6 +44,11 @@ def memory_decoder(obj):
     return new_obj
 
 
+def get_similarity(hnsw, vec: list) -> float:
+    result = hnsw.knn_query(vec, k=1, filter=None)
+    return result[1].flatten()[0]
+
+
 def init_hnsw():
     # possible options are l2, cosine or ip
     hnsw = hnswlib.Index(space=DISTANCE_FUNC, dim=DIM)
@@ -65,10 +70,9 @@ def init_hnsw():
     return hnsw
 
 
-
-
 class MemoryPool:
-    def __init__(self, memory_file_path="data/memories_dict.json", hnsw_file_path=HNSW_PKL_PATH, memory_list_init_path=None):
+    def __init__(self, memory_file_path="data/memories_dict.json", hnsw_file_path=HNSW_PKL_PATH,
+                 memory_list_init_path=None):
         """
         MemoryPool() -> empty memory pool
         MemoryPool(path) -> loads pool from file at path
@@ -95,28 +99,28 @@ class MemoryPool:
                 for i in tqdm(range(len(lines))):
                     if i < LINE_CONTEXT_LEN:
                         continue
-                    context_lines = lines[i-LINE_CONTEXT_LEN:i+1]
+                    context_lines = lines[i - LINE_CONTEXT_LEN:i + 1]
                     line = '\n'.join(context_lines)
                     self.add(Memory(line))
                 print("Done.")
 
-    def get_similar(self, vec: list, k=5) -> list:
+    def get_similar(self, vec: list, k=5, **kwargs) -> list:
         _k = min(k, len(self.memories))
-        result = self.hnsw.knn_query(vec, k=_k, filter=None)
+        result = self.hnsw.knn_query(vec, k=_k, **kwargs)
         result = result[0].flatten(), result[1].flatten()
         label_dist_list = list(zip(*result))
         return label_dist_list
 
-    def get_similar_mem_ids(self, vec: list, k=5) -> list:
+    def get_similar_mem_ids(self, vec: list, k=5, **kwargs) -> list:
         # turn this into a normal list
-        result = self.get_similar(vec, k=k)
+        result = self.get_similar(vec, k=k, **kwargs)
         return [x[0] for x in result]
 
-    def get_memory(self, memory_id):
+    def get_memory_from_id(self, memory_id):
         return self.memories[memory_id]
 
     def get_strings(self, memory_ids: list):
-        return [m.string for m in [self.get_memory(x) for x in memory_ids]]
+        return [m.string for m in [self.get_memory_from_id(x) for x in memory_ids]]
 
     def add_memories(self, memories: list[Memory]):
         pass

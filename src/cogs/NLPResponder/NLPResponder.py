@@ -10,7 +10,7 @@ from discord.ext import commands
 
 import src.cogs.NLPResponder.GPTHelper as GPTHelper
 from src.cogs.NLPResponder.BotBrain import BotBrain
-from src.cogs.NLPResponder.BotResponse import BotResponse
+from src.cogs.NLPResponder.BotCommands import BotCommands
 from src.cogs.NLPResponder.Context import Context
 from src.cogs.NLPResponder.Conversation import Conversation
 from src.cogs.NLPResponder.commands import BorisCommands
@@ -47,9 +47,9 @@ class NLPResponder(commands.Cog):
     # on_message listens for incoming messages starting with an @(botname) and then responds to them
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        current_convo = None
-        if message.channel.id in self.bot_brain.currentConversations:
-            current_convo = self.bot_brain.currentConversations[message.channel.id]
+        current_convo = self.bot_brain.get_message_conversation(message)
+        if current_convo:
+            current_convo.num_msg_since_response += 1
 
         # consider conversations over after 3 minutes of boris not responding
         conversationsToStop = []
@@ -86,12 +86,12 @@ class NLPResponder(commands.Cog):
             await self.replyToMessage(message, conversation)
         elif "boris" in message.clean_content.lower():
             logger.warning("I heard my name.")
-            if self.bot_brain.isMessageInConversation(message) or 0.2 > random.random():
-                await self.replyToMessage(message, conversation)
-        elif self.bot_brain.isMessageInConversation(message):
+            if conversation or 0.2 > random.random():
+                await self.replyToMessage(message)
+        elif conversation:
             logger.warning("Message received in convo channel")
-            self.bot_brain.currentConversations[message.channel.id].timestamp = datetime.datetime.now()
-            if 0.3 > random.random():
+            conversation.timestamp = datetime.datetime.now()
+            if 0.3 > random.random() or conversation.num_msg_since_response >= conversation.get_num_users():
                 await self.replyToMessage(message, conversation)
         # TODO 5% chance asks GPT if it's relevant to Boris or his memories
         elif 0.05 > random.random():
@@ -123,9 +123,9 @@ class NLPResponder(commands.Cog):
             logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
         self.bot_brain.currentConversations[channel.id] = None
 
-    async def replyToMessage(self, message, conversation):
+    async def replyToMessage(self, message, conversation=None):
         logger.info("Responding")
-        if not self.bot_brain.isMessageInConversation(message):
+        if not conversation:
             conversation = self.bot_brain.create_conversation(message.channel)
-            self.bot_brain.currentConversations[message.channel.id] = conversation
-        await self.bot_brain.reply(message, conversation)
+        async with message.channel.typing():
+            await self.bot_brain.reply(message, conversation)

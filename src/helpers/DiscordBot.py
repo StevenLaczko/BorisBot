@@ -43,6 +43,7 @@ class DiscordBot(commands.Bot):
 
     async def on_error(self, event, *args, **kwargs):
         logger.error(traceback.format_exc())
+        print(traceback.format_exc())
 
     async def send_message(self, channelID, message):
         channel = self.get_channel(channelID)
