@@ -69,14 +69,14 @@ class MemoryManager:
         m = Memory(mem_str)
         if not memory_match_prob:
             memory_match_prob = settings.memory_match_prob
-        m_id_dist_list = self._memory_pool.get_similar(m.embedding, 3)
+        m_id_dist_list = self._memory_pool.get_similar(m.embedding, 3, filter=lambda x: x != m.id)
         if len(m_id_dist_list) > 0:
             for similar_mem_tuple in m_id_dist_list:
                 m_id = similar_mem_tuple[0]
                 similarity = similar_mem_tuple[1]
                 similar_mem: Memory = self.get_memory_from_id(m_id)
                 fuzzy_match_similarity = fuzzyMatchString(similar_mem.string, m.string)[1]
-                if similarity > memory_match_prob or fuzzy_match_similarity > memory_match_prob:
+                if similarity > memory_match_prob and fuzzy_match_similarity > memory_match_prob:
                     logger.info(
                         f"Not saving memory. Too close to {similar_mem.string}, similarity {similarity}, fuzzymatch: {fuzzy_match_similarity}")
                     return

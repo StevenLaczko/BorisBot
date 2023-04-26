@@ -32,7 +32,7 @@ class ContextStack(OrderedSet):
         for c_name in commands.keys():
             name = c_name + "Command"
             if name in funcs:
-                logger.info(f"Executing {name} with args {commands[c_name]}")
+                logger.info(f"Executing {name} with args {commands[c_name][:-1]}")
             r = await funcs[name].execute(bot_brain, message, conversation, commands[c_name][:-1], **commands[c_name][-1])
             if r:
                 returns[c_name] = r

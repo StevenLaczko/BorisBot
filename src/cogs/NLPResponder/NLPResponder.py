@@ -107,11 +107,19 @@ class NLPResponder(commands.Cog):
 
     @commands.command(name="joinvc", help="Join a vc, give him an id")
     async def join_vc(self, ctx, vc_id):
+        vc_id = int(vc_id)
         if vc_id is None:
-            vc: discord.VoiceChannel = await ctx.author.voice.channel
+            vc: discord.VoiceChannel = ctx.author.voice.channel
         else:
-            vc: discord.VoiceChannel = await ctx.guild.get_channel(vc_id)
-        self.bot_brain.connect_to_vc(vc)
+            vc = ctx.guild.get_channel(vc_id)
+        await self.bot_brain.connect_to_vc(vc, ctx.channel)
+
+    @commands.command(name="disconnect", help="Disconnect from vc")
+    async def disconnect(self, ctx):
+        if self.bot_brain.vc_handler.is_connected():
+            self.bot_brain.vc_handler.vc_disconnect()
+        else:
+            await ctx.message.reply("I ain't connected to a vc!")
 
     # METHODS
 

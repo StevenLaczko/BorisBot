@@ -14,6 +14,7 @@ from src.cogs.NLPResponder.Context import Context
 from src.cogs.NLPResponder.ContextStack import ContextStack
 from src.cogs.NLPResponder.Memory import Memory, cosine_similarity
 from src.cogs.NLPResponder.Prompt import Prompt
+from src.cogs.NLPResponder.VCHandler import VCHandler
 from src.helpers.Settings import settings
 import logging
 
@@ -42,8 +43,8 @@ class BotBrain:
                                                            memory_list_init=memory_list_init,
                                                            context_files=context_files)
         self.contexts: dict[str, Context] = self.load_contexts()
-        self.vc_task: Union[asyncio.Task, None] = None
         self.mood: str = ""
+        self.vc_handler = VCHandler()
 
     def load_contexts(self) -> dict[str, Context]:
         contexts = {}
@@ -117,14 +118,16 @@ class BotBrain:
         bot_commands: BotCommands = self.getBotCommands(bot_inputs)
         logger.debug(f"Full response:\n{bot_commands.full_response}")
 
-        response_str = bot_commands.commands["RESPOND"][0]
-        response_embed = GPTHelper.getEmbedding(response_str) if "RESPOND" in bot_commands.commands else None
+        response_str = bot_commands.commands["RESPOND"][0] if "RESPOND" in bot_commands.commands else None
+        response_embed = GPTHelper.getEmbedding(response_str) if response_str else None
         await self.execute_bot_commands(message, conversation, bot_commands,
                                         response_str=response_str,
                                         response_embed=response_embed,
                                         full_response=bot_commands.full_response)
 
         self.add_contextual_memory_if_best(convo_memories, context_memories, response_embed, conversation, bot_commands)
+        if self.vc_handler.is_connected() and message.channel == self.vc_handler.vc_text_channel:
+            self.vc_handler.respond(response_str)
 
     def add_contextual_memory_if_best(self, convo_memories, context_memories, response_embed, conversation, bot_commands):
         if "RESPOND" not in bot_commands.commands or not response_embed:
@@ -182,9 +185,6 @@ class BotBrain:
             return self.currentConversations[message.channel.id]
         return None
 
-    def is_message_in_conversation(self, message: discord.Message, conversation: Conversation):
-        conversation.has_message(message)
-
     def getBotCommands(self, inputs: list, temperature=None, freq_pen=None, model=None):
         # gpt_chatlog is a list of
         #   dict openai json messages,
@@ -199,25 +199,5 @@ class BotBrain:
                           message_list: list[discord.Message], user_ids=None):
         self.currentConversations[channel.id] = Conversation(channel, timestamp=datetime.now())
 
-    def vc_disconnect(self):
-        self.vc_task.cancel()
-
-    def vc_callback(self, data):
-        self.audio_retrieve_start = datetime.now()
-        # Decode the Opus data to PCM
-        pcm_data, _ = discord.opus.decode(data, 3840)
-
-        # Process the PCM data as needed
-        # For example, write it to a file using soundfile
-        f = io.BytesIO(pcm_data)
-        from pydub import AudioSegment
-        AudioSegment.from_file(f, format='WAV')
-
-        # Do something with the WAV data, such as sending it to a speech-to-text API
-        text = GPTHelper.speech_to_text(wav_bytes)
-
-    async def connect_to_vc(self, vc: discord.VoiceChannel):
-        discord.opus.load_opus(settings.opus)
-        vc_con = await vc.connect()
-        loop = asyncio.get_event_loop()
-        self.vc_task = loop.create_task(vc_con.listen(self.vc_callback))
+    async def connect_to_vc(self, vc, text_channel):
+        await self.vc_handler.connect_to_vc(vc, text_channel)
