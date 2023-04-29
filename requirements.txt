@@ -11,3 +11,5 @@ hnswlib~=0.7.0
 numpy~=1.24.2
 opuslib
 PyNaCl
+scipy
+pydub

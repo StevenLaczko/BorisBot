@@ -2,7 +2,11 @@ FROM python:3.11
 
 WORKDIR /app
 
-RUN apt install tzdata
+RUN apt-get update
+
+RUN apt-get install tzdata
+
+RUN apt-get install libopus-dev -y
 
 COPY requirements.txt .
 
