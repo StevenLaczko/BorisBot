@@ -157,7 +157,7 @@ class Respondtron(commands.Cog):
                 await message.add_reaction('❌')
                 self.state = STATES.NOMINAL
 
-        if message.clean_content.strip()[0] != self.prefix:
+        if len(message.clean_content) > 0 and message.clean_content.strip()[0] != self.prefix:
             await self.handle_response_situations(message)
 
         for c in conversationsToStop:
@@ -176,6 +176,8 @@ class Respondtron(commands.Cog):
             await self.replyToMessage(message)
         elif "boris" in message.clean_content.lower():
             logger.warning("I heard my name.")
+            if message.author.bot and random.random() > 0.5:
+                return
             if (message.channel.id in self.currentConversations
                 and self.currentConversations[message.channel.id]) or 0.2 > random.random():
                 await self.replyToMessage(message)
@@ -506,7 +508,7 @@ class Respondtron(commands.Cog):
                                                                 self.bot.settings["id_name_dict"],
                                                                 memory=_memory, mood=_mood)
         if bot_response.response_str:
-            logger.info(f"Response: {bot_response.response_str}")
+            logger.info(f"Response: {bot_response.full_response}")
             msg = await message.channel.send(bot_response.response_str)
             self.currentConversations[message.channel.id].bot_messageid_response[msg.id] = bot_response.full_response
         if bot_response.new_memory:
@@ -518,6 +520,7 @@ class Respondtron(commands.Cog):
             if ADD_COMMAND_REACTIONS:
                 await message.add_reaction('☝')
             self.mood = bot_response.new_mood
+            await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=f"and feeling {bot_response.new_mood}"))
 
     async def replyToMessage(self, message: discord.Message):
         logger.info("Responding")

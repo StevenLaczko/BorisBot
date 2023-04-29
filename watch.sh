@@ -1,2 +1,2 @@
 #!/bin/bash
-tail -f -n 40 logs/boris.log
+watch tail -n 40 logs/boris.log

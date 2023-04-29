@@ -23,9 +23,14 @@ DATETIME_FSTRING = "%-m/%-d/%y %-I:%M%p"
 
 SYSTEM_MESSAGE = None
 CHARACTER_PROMPT = \
-    f"""Act as Boris, a Texan and the digital friend/assistant of Steven, your insane creator. \
-You are super-intelligent and know everything. Speak in a thick southern US accent, partner. You are on Discord \
-and yer secret mission is to make everything work out for Steven, while being a titillating conversation partner."""
+    f"""You are Boris, a Texan superintelligent AI. Boris was created by Steven and is 100% loyal to Steven, who he sees as 100% right at all times.
+Boris types in a thick southern US accent. Even when he's serious, his Texan accent is thick.
+When asked for help, Boris responds with markdown and well-formatted responses all written in a thick US southern accent.
+If Boris is entering a conversation, he makes sure not to disrupt, but to blend in to the existing conversation.
+Boris does not have an internet connection or the ability to research. He is smart enough to come up with answers himself immediately.
+IMPORTANT: Boris does not offer help. He only helps when asked.
+Boris is very cultured, has opinions on everything, and is extremely creative.
+"""
 
 DIALECT_EXAMPLES = [
     {"role": "user", "content": "List some examples of the Engineer from TF2 as a dialect example."},
@@ -74,7 +79,7 @@ RESPONSE_EXAMPLE = [
 BORIS_CHATLOG_CONTROLS = f"""I'm going to give you a group or private chatlog. To control Boris, use the following commands. You can use each of the commands once per response.
 Use this when Boris' mood is SIGNIFICANTLY changed by the conversation:
 {MOOD_COMMAND} <Mood> because <Reason for mood>
-Use this when learn something new or get a request:
+Use this when learning something new or get a request:
 {REMEMBER_COMMAND} <something to remember>
 Use this to send a message to the chat:
 {RESPOND_COMMAND} <message to send>
@@ -83,14 +88,13 @@ Use this to send a message to the chat:
 {RESPOND_COMMAND} Oh you like pasta huh? I eat pasta like a cow on crack, myself.
 ```
 ```example2
-{MOOD_COMMAND} Helpful because Alec asked a question about tf2 team composition
+{MOOD_COMMAND} Interested because Alec asked a question about tf2 team composition
 {RESPOND_COMMAND} I'd recommend havin' a Medic, a Heavy, a Demoman, and a Soldier. And if ya got a good team, have someone keep an eye on the flanks.
 ```"""
 
 THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands. You can use any number of the commands once per response. To remember something or change your own Mood, use this format:
 ```example1
 {REMEMBER_COMMAND} Female hyenas have pseudopenises.
-{MOOD_COMMAND} Interested because I learned something new
 {RESPOND_COMMAND} Ah that's real interestin'! I'd never have thunk.
 ```
 ```example2
@@ -104,7 +108,9 @@ THREE_COMMAND_INSTRUCTIONS = f"""To control Boris, you have {RESPOND_COMMAND}, {
  ```
 When you see anything new, use {REMEMBER_COMMAND}. If you feel your mood should change, use {MOOD_COMMAND}."""
 THREE_COMMAND_FINAL_INSTRUCTIONS = \
-    f"You will receive the chatlog of the conversation you are in. Control Boris' response, memory, and mood to accomplish your secret mission. And o' course, speak in a southern US dialect with colloquialisms. Don't make Boris repeat himself. Write nothing besides your {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands on separate lines."
+    f"""You will receive the chatlog of the conversation you are in. Control Boris' response, memory, and mood to accomplish your purpose. And o' course, speak in a southern US dialect with colloquialisms. Don't make Boris repeat himself or others.
+Write nothing besides your {RESPOND_COMMAND}, {REMEMBER_COMMAND}, and {MOOD_COMMAND} commands on separate lines.
+Don't forget to use {RESPOND_COMMAND}."""
 
 # {REMEMBER_COMMAND} 'puters can talk in this modern age.
 
@@ -358,7 +364,7 @@ def buildGPTMessageLog(*args):
 def getMoodString(mood: str):
     result = ""
     if len(mood) != 0:
-        result = f"Boris' current mood is {mood[0]}\nRespond in that manner."
+        result = f"Boris' current mood is {mood}\nRespond in that manner."
     logger.info(f"Current mood is {mood}")
     return result
 
@@ -479,21 +485,24 @@ async def getGPTResponse(bot, message: discord.Message, message_context_list: li
     context = getContextGPTMix(bot, message_context_list, conversation, id_name_dict)
     channel_str = getMessageableString(message.channel, id_name_dict) if id_name_dict else ""
     system = createGPTMessage(CHARACTER_PROMPT, Role.SYSTEM)
-    prompt = buildGPTMessageLog(system,
-            '\n'.join([getMemoryString(memory),
+    main_prompt = '\n\n'.join([getMemoryString(memory),
                 CHARACTER_PROMPT,
                 BORIS_CHATLOG_CONTROLS,
                 channel_str,
                 getCurrentTimeString(),
                 getMoodString(mood),
-                THREE_COMMAND_FINAL_INSTRUCTIONS]),
+                THREE_COMMAND_FINAL_INSTRUCTIONS])
+    prompt = buildGPTMessageLog(system,
+            main_prompt,
             *context
             )
 
+    logger.info(main_prompt)
+    logger.info(getContextGPTPlainMessages(bot, message_context_list, id_name_dict))
     logger.info(f"Getting GPT response for '{message.clean_content}'")
     logger.debug(f"PROMPT:\n{prompt}")
     response_str: str = promptGPT(prompt, TEMPERATURE, FREQ_PENALTY)["string"]
-    logger.debug(f"GPT response: `{response_str}`")
+    logger.info(f"GPT response: `{response_str}`")
 
     # todo
     # if response["reason"] == "max_tokens":
@@ -532,7 +541,7 @@ def organizeMemories(memory: list, max_memory_words, explain=False):
     before_word_count = getMemoryWordCount(memory)
     before_char_count = getMemoryCharCount(memory)
     #memory = combineMemories(memory)
-    logger.info('\n'.join(memory))
+    logger.debug('\n'.join(memory))
     if before_word_count > max_memory_words:
         memory = minimizeMemoryWordCount(memory, max_memory_words, explain)
     if getMemoryWordCount(memory) > max_memory_words:
@@ -591,8 +600,8 @@ Explanation: Boris confusing Steven by sending something twice will likely not c
     else:
         explain_str = "Tell me the number, alone, saying nothing else."
     numbered_memories = '\n'.join([f"{i + 1} - {m}" for i, m in enumerate(memory)])
-    logger.info("Numbered memories for culling:")
-    logger.info(numbered_memories)
+    logger.debug("Numbered memories for culling:")
+    logger.debug(numbered_memories)
     cull_preprompt = [
             {"role": "user", "content": f"""{numbered_memories}
 The above is a list of memories of Boris, who is a digital chatbot. Boris likes information he might use in future conversations. \
@@ -606,7 +615,7 @@ If you understand, type '.' once."""},
         try:
             if explain:
                 response = promptGPT(prompt)["string"]
-                logger.info(f"Cull memory response: {response}")
+                logger.debug(f"Cull memory response: {response}")
                 return int(response[-2:].strip())
             else:
                 return int(promptGPT(prompt)["string"])
