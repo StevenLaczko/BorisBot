@@ -2,11 +2,10 @@ import json
 
 from ordered_set import OrderedSet
 
-from src.cogs.NLPResponder.Memory import Memory
-from src.cogs.NLPResponder.MemoryPool import MemoryPool
+from src.cogs.NLPResponder.Memory.Memory import Memory
 from src.helpers.logging_config import logger
 
-MAX_MEMORIES = 6
+MAX_MEMORIES = 8
 
 
 class Context:
@@ -25,6 +24,10 @@ class Context:
     def init_context(self, d, funcs):
         self.name = d["NAME"]
 
+        ids = [x for x in d["MEMORY_IDS"]]
+        for mem_id in ids:
+            if self.memory_manager.get_memory_from_id(mem_id) is None:
+                d["MEMORY_IDS"].remove(mem_id)
         for m_id in d["MEMORY_IDS"]:
             self._memory.add(m_id)
 
@@ -46,8 +49,6 @@ class Context:
                 if dict_name == f.__class__.__name__:
                     self.commands[dict_name] = f
                     break
-
-        self._memory.update(d["MEMORY_IDS"])
 
     def get_memory_ids(self):
         return self._memory

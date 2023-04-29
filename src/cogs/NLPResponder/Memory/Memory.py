@@ -1,10 +1,38 @@
 import datetime
+import json
 import math
 import uuid
+from copy import deepcopy
+
+from scipy.spatial.distance import cosine
 
 from src.cogs.NLPResponder import GPTHelper
 from src.cogs.NLPResponder.GPTHelper import getEmbedding
 from src.helpers.logging_config import logger
+
+
+# Custom encoder to serialize datetime objects
+class MemoryEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Memory):
+            d = deepcopy(obj.__dict__)
+            d["timestamp"] = obj.timestamp.isoformat()
+            return d
+        return super().default(obj)
+
+
+# Custom decoder to deserialize datetime objects
+def memory_decoder(obj):
+    if "embedding" in obj:
+        obj["timestamp"] = datetime.datetime.fromisoformat(obj["timestamp"])
+        m = Memory("", embedding=[])
+        m.__dict__.update(obj)
+        return m
+    else:
+        new_obj = {}
+        for k in obj.keys():
+            new_obj[int(k)] = obj[k]
+    return new_obj
 
 
 def fnv1a_32(s: bytes) -> int:
@@ -36,15 +64,15 @@ def get_32_int_guid() -> int:
 
 def cosine_similarity(v1, v2):
     """Returns the cosine similarity between two vectors"""
-    dot_product = sum(x * y for x, y in zip(v1, v2))
-    magnitude_v1 = math.sqrt(sum(x ** 2 for x in v1))
-    magnitude_v2 = math.sqrt(sum(x ** 2 for x in v2))
-    return dot_product / (magnitude_v1 * magnitude_v2)
+    return 1 - cosine(v1, v2)
 
 
-def update_mem_scores(response_embed, memories: list):
-    [m.update_memory_score_from_response_embedding(response_embed) for m in memories]
-    logger.info("Memory scores updated:")
+def update_mem_scores(compare_embed, memories: list):
+    logger.info("Updating memory scores.")
+    logger.info("Memory scores before:")
+    [logger.info(f"{m.score} - {m.string}") for m in memories]
+    logger.info("Memory scores after:")
+    [m.update_memory_score_from_embedding(compare_embed) for m in memories]
     [logger.info(f"{m.score} - {m.string}") for m in memories]
 
 
@@ -56,8 +84,8 @@ class Memory:
         self.id: int = mem_id if mem_id else get_32_int_guid()
         self.score: float = 0
 
-    def update_memory_score_from_response_embedding(self, response_embed: list):
-        sim = cosine_similarity(self.embedding, response_embed)
+    def update_memory_score_from_embedding(self, compare_embed: list):
+        sim = cosine_similarity(compare_embed, self.embedding)
         self.score += sim
         self.score /= 2
 
@@ -73,4 +101,4 @@ class Memory:
         return self.embedding[i]
 
     def __repr__(self):
-        return f"'{self.string}', timestamp: {self.timestamp}, score: {self.score}, embedding: {self.embedding[0:2]}..."
+        return f"timestamp: {self.timestamp}, score: {self.score}, text: '{self.string}', embedding: {self.embedding[0:2]}..."

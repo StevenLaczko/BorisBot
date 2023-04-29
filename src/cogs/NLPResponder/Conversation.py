@@ -7,8 +7,8 @@ from src.cogs.NLPResponder.Context import Context
 from src.cogs.NLPResponder.ContextStack import ContextStack
 from threading import Lock
 
-from src.cogs.NLPResponder.Memory import Memory
-from src.cogs.NLPResponder.Memory import cosine_similarity
+from src.cogs.NLPResponder.Memory.Memory import Memory
+from src.cogs.NLPResponder.Memory.Memory import cosine_similarity
 
 
 class Conversation:
@@ -35,10 +35,10 @@ class Conversation:
 
     def update_memory_scores_from_str(self, response_str: str):
         embed = GPTHelper.getEmbedding(response_str)
-        self.memory_manager.update_mem_scores_from_ids(embed, self.context_stack.get_memory_ids())
+        self.memory_manager.update_memories_scores_from_ids(embed, self.context_stack.get_memory_ids())
 
     def update_memory_scores_from_embed(self, response_embed: list):
-        self.memory_manager.update_mem_scores_from_ids(response_embed, self.context_stack.get_memory_ids())
+        self.memory_manager.update_memories_scores_from_ids(response_embed, self.context_stack.get_memory_ids())
 
 
     def get_num_users(self):
@@ -52,12 +52,12 @@ class Conversation:
     def replace_conversation_msg_by_id(self, msg_id: int, replacement_str: str):
         self.bot_messageid_response[msg_id] = replacement_str
 
-    def add_memory(self, memory: Memory, response_str: str = None, response_embed: list = None):
-        if response_str and memory.score == 0:
-            if response_embed:
-                memory.score = cosine_similarity(response_embed, memory.embedding)
+    def add_memory(self, memory: Memory, compare_str: str = None, compare_embed: list = None):
+        if memory.score == 0 and (compare_embed or compare_str):
+            if compare_embed:
+                memory.score = cosine_similarity(compare_embed, memory.embedding)
             else:
-                memory.score = cosine_similarity(GPTHelper.getEmbedding(response_str), memory.embedding)
+                memory.score = cosine_similarity(GPTHelper.getEmbedding(compare_str), memory.embedding)
         self.context_stack.add_memory_to_contexts(memory)
 
     def save_context_memories(self):

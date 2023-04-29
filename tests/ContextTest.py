@@ -1,12 +1,8 @@
 import json
 import unittest
 
-import discord
-
-from src.Boris import Boris
-from src.cogs.NLPResponder.BotBrain import BotBrain
 from src.cogs.NLPResponder.Context import Context
-from src.cogs.NLPResponder.MemoryPool import MemoryPool
+from src.cogs.NLPResponder.Memory.MemoryPool import MemoryPool
 from src.cogs.NLPResponder.commands import BorisCommands
 
 context_dict = """{

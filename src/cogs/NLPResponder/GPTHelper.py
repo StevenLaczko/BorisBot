@@ -205,26 +205,39 @@ def getUserNameAndNick(user: discord.User, id_name_dict) -> (Union[None, str], s
     return name, user.name
 
 
-def getMessageStr(bot, message: discord.Message, id_name_dict, writeBotName=False, write_timestamp_for_bot=True, bot_name=None):
+def getMessageStr(bot, message: discord.Message, id_name_dict,
+                  write_bot_name=False,
+                  write_user_name=True,
+                  write_timestamp_for_bot=True,
+                  bot_name=None,
+                  bot_prepend_str=None):
     local_tz = pytz.timezone("America/New_York")
     local_timestamp = message.created_at.astimezone(local_tz)
     local_timestamp = local_timestamp.strftime(DATETIME_FSTRING)
-    if writeBotName or bot.user.id != message.author.id:
-        if bot.user.id == message.author.id and bot_name:
-            name = None
-            nick_str = bot_name
-        else:
-            name, nick_str = getUserNameAndNick(message.author, id_name_dict)
-        # if bot.user.id == message.author.id:
-        #     result = f"You: {message.clean_content}"
-        # else:
-        name_str = f"{name} (aka {nick_str})" if name else nick_str
-        if write_timestamp_for_bot:
-            result = f"{name_str} ({local_timestamp}): {message.clean_content}"
-        else:
-            result = f"{name_str}: {message.clean_content}"
+
+    is_bot = message.author.id == bot.user.id
+    write_user_info = False
+    sender_info_list = []
+    name = nick_str = None
+    if write_bot_name and is_bot and not bot_prepend_str:
+        name, nick_str = (None, bot_name) if bot_name else getUserNameAndNick(message.author, id_name_dict)
+    elif write_user_name and not is_bot:
+        name, nick_str = getUserNameAndNick(message.author, id_name_dict)
+
+    if (write_user_name and not is_bot) or (write_bot_name and is_bot):
+        sender_info_list.append(f"{name} (aka {nick_str})" if name else nick_str)
+        write_user_info = True
+
+    if write_timestamp_for_bot and is_bot and not bot_prepend_str:
+        sender_info_list.append(f"({local_timestamp})")
+
+    if bot_prepend_str and is_bot:
+        result = f"{bot_prepend_str} {message.clean_content}"
+    elif (write_bot_name and is_bot) or (write_user_name and not is_bot):
+        sender_info = ' '.join(sender_info_list) if write_user_info else None
+        result = f"{sender_info}: {message.clean_content}" if sender_info else message.clean_content
     else:
-        result = message.clean_content
+        result = f"{message.clean_content}"
 
     return result
 
@@ -250,7 +263,7 @@ def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[
     return result
 
 
-def getContextGPTMix(bot, messages: list[discord.Message], conversation, id_name_dict, write_timestamp_for_bot=True, bot_name=None) -> list:
+def getContextGPTMix(bot, messages: list[discord.Message], conversation, id_name_dict, write_timestamp_for_bot=True, bot_name=None, bot_prepend_str=None) -> list:
     result = []
     chatlog_start = "```chatlog\n"
     log_str = chatlog_start
@@ -268,9 +281,10 @@ def getContextGPTMix(bot, messages: list[discord.Message], conversation, id_name
             log_str += getMessageStr(bot,
                                      m,
                                      id_name_dict,
-                                     writeBotName=True,
+                                     write_bot_name=True,
                                      write_timestamp_for_bot=write_timestamp_for_bot,
-                                     bot_name=bot_name) + '\n'
+                                     bot_name=bot_name,
+                                     bot_prepend_str=bot_prepend_str) + '\n'
 
     if len(log_str) != chatlog_start:
         log_str += "```"
@@ -279,11 +293,14 @@ def getContextGPTMix(bot, messages: list[discord.Message], conversation, id_name
     return result
 
 
-def getContextGPTPlainMessages(bot, messages: list[discord.Message], id_name_dict, markdown=True) -> str:
+def getContextGPTPlainMessages(bot, messages: list[discord.Message], id_name_dict,
+                               markdown=True,
+                               write_bot_name=True,
+                               write_user_name=True) -> str:
     result_str = "```chatlog\n" if markdown else ""
 
     for m in messages:
-        result_str += getMessageStr(bot, m, id_name_dict, writeBotName=True) + '\n'
+        result_str += getMessageStr(bot, m, id_name_dict, write_bot_name=write_bot_name, write_user_name=write_user_name) + '\n'
 
     result_str += "```" if markdown else ""
     return result_str
