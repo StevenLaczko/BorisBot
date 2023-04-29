@@ -68,7 +68,8 @@ class NLPResponder(commands.Cog):
         if message.author.id == self.bot.user.id:
             return
 
-        if message.clean_content.strip()[0] != self.prefix:
+        clean_content = message.clean_content.strip()
+        if len(clean_content) > 0 and clean_content[0] != self.prefix:
             await self.handle_response_situations(message, current_convo)
 
         for c in conversationsToStop:
@@ -99,25 +100,50 @@ class NLPResponder(commands.Cog):
 
     # COMMANDS
 
-    @commands.command(name="remember", help="Remember.")
-    @commands.is_owner()
-    async def remember(self, ctx):
-        await self.storeMemory(
-            await self.getConvoContext(ctx.channel, after=None, ignore_list=self.bot.settings["ignore_list"]))
+    # @commands.command(name="remember", help="Remember.")
+    # @commands.is_owner()
+    # async def remember(self, ctx):
+    #     await self.bot_brain.
 
-    @commands.command(name="joinvc", help="Join a vc, give him an id")
-    async def join_vc(self, ctx, vc_id):
-        vc_id = int(vc_id)
-        if vc_id is None:
+    @commands.is_owner()
+    @commands.command(name="listmemories", help="listmemories <num memories, default 10> <newest, default/oldest>")
+    async def list_memories(self, ctx, num_mems=10, order="newest"):
+        if not isinstance(num_mems, int):
+            await ctx.channel.send("The first argument needs to be an integer.")
+            return
+        if not (order == "newest" or order == "oldest"):
+            await ctx.channel.send("The second argument needs to be either 'newest' or 'oldest'.")
+            return
+        sorted_mems = self.bot_brain.memory_manager.get_memory_list(num_mems, order == "newest")
+        await ctx.channel.send('\n'.join(sorted_mems))
+
+    @commands.is_owner()
+    @commands.command(name="delmemory", help="delmemory <id>")
+    async def del_memory(self, ctx, mem_id):
+        try:
+            self.bot_brain.memory_manager.delete_memory(mem_id)
+        except KeyError:
+            await ctx.channel.send("ID not found.")
+        await ctx.channel.send("Memory deleted.")
+
+    @commands.command(name="joinvc", help="Join a vc. Be in the vc, or give an id, or a channel mention.")
+    async def join_vc(self, ctx, x: str):
+        try:
+            vc_id = int(x)
+        except Exception:
+            vc_id = None
+        if not x:
             vc: discord.VoiceChannel = ctx.author.voice.channel
-        else:
+        elif vc_id:
             vc = ctx.guild.get_channel(vc_id)
+        else:
+            vc: discord.VoiceChannel = ctx.message.channel_mentions[0]
         await self.bot_brain.connect_to_vc(vc, ctx.channel)
 
     @commands.command(name="disconnect", help="Disconnect from vc")
     async def disconnect(self, ctx):
         if self.bot_brain.vc_handler.is_connected():
-            self.bot_brain.vc_handler.vc_disconnect()
+            await self.bot_brain.vc_handler.vc_disconnect()
         else:
             await ctx.message.reply("I ain't connected to a vc!")
 

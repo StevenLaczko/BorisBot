@@ -9,10 +9,16 @@ from src.helpers.Settings import settings
 
 async def getContext(channel, before,
                      bot=None,
-                     after=False,
+                     after=None,
+                     time_cutoff: timedelta = None,
                      num_messages_requested=None,
                      max_context_words=None,
                      ignore_list=None):
+    # set after to None to only limit context grabbing by number of words/messages (gets lots of context for first message)
+    now = datetime.now(pytz.UTC)
+    if not after and time_cutoff:
+        past_cutoff = now - time_cutoff
+        after = past_cutoff
     if not max_context_words:
         if not bot:
             raise (ValueError("Bot with settings file and/or max_context_words must be given."))
@@ -24,10 +30,6 @@ async def getContext(channel, before,
 
     logger.info("Getting context")
     all_messages = []
-    now = datetime.now(pytz.UTC)
-    if after is False:
-        past_cutoff = now - timedelta(minutes=30)
-        after = past_cutoff
     # Keep getting messages until the word count reach 100
     word_count = 0
     do_repeat = True

@@ -28,9 +28,12 @@ class VCHandler:
     def is_connected(self):
         return True if self.vc_con else False
 
-    def vc_disconnect(self):
-        self.vc_task.cancel()
-        self.vc_con = None
+    async def vc_disconnect(self):
+        if self.vc_task and not self.vc_task.done():
+            self.vc_task.cancel()
+        if self.vc_con:
+            await self.vc_con.voice_disconnect()
+            self.vc_con = None
         self.vc_text_channel = None
         self.audio_retrieve_start = None
 
@@ -53,8 +56,6 @@ class VCHandler:
     async def connect_to_vc(self, vc: discord.VoiceChannel, text_channel):
         self.vc_con = await vc.connect()
         self.vc_text_channel = text_channel
-        #loop = asyncio.get_event_loop()
-        #self.vc_task = loop.create_task(self.vc_con.listen(self.vc_callback))
 
     def respond(self, text):
         response_bytes = self.tts.generate(text)

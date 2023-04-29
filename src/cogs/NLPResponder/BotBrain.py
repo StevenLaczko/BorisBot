@@ -1,24 +1,19 @@
-import asyncio
-import io
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Union
 
 import discord
 
-from src.cogs.NLPResponder import GPTHelper, DiscordHelper, GPTHelper
-from src.cogs.NLPResponder.MemoryManager import MemoryManager
+from src.cogs.NLPResponder import DiscordHelper, GPTHelper
+from src.cogs.NLPResponder.Memory.MemoryManager import MemoryManager
 from src.cogs.NLPResponder.BotCommands import BotCommands
 from src.cogs.NLPResponder.Context import Context
-from src.cogs.NLPResponder.ContextStack import ContextStack
-from src.cogs.NLPResponder.Memory import Memory, cosine_similarity
+from src.cogs.NLPResponder.Memory.Memory import Memory, cosine_similarity
 from src.cogs.NLPResponder.Prompt import Prompt
 from src.cogs.NLPResponder.VCHandler import VCHandler
 from src.helpers.Settings import settings
-import logging
 
-from src.cogs.NLPResponder.MemoryPool import MemoryPool
 from src.cogs.NLPResponder.Conversation import Conversation
 from src.helpers.DiscordBot import DiscordBot
 from src.helpers.logging_config import logger
@@ -82,6 +77,7 @@ class BotBrain:
         # get chatlog
         chatlog_context = await DiscordHelper.getContext(message.channel,
                                                          message,
+                                                         time_cutoff=timedelta(minutes=30),
                                                          bot=self.bot,
                                                          max_context_words=max_context_words)
         chatlog_context.append(message)
@@ -90,17 +86,23 @@ class BotBrain:
                                                        conversation,
                                                        settings.id_name_dict,
                                                        write_timestamp_for_bot=False,
-                                                       bot_name="Response")
+                                                       bot_prepend_str="!RESPOND ")
         #gpt_chatlog = GPTHelper.getContextGPTPlainMessages(self.bot, chatlog_context, settings.id_name_dict, markdown=False)
         #gpt_chatlog = "\n\nConversation:\n" + gpt_chatlog
+        chatlog_plaintext = GPTHelper.getContextGPTPlainMessages(self.bot,
+                                                                 chatlog_context,
+                                                                 settings.id_name_dict,
+                                                                 markdown=False,
+                                                                 write_bot_name=False,
+                                                                 write_user_name=False)
+        chatlog_embed = GPTHelper.getEmbedding(chatlog_plaintext)
 
         # get memories
-        context_memories = self.memory_manager.get_context_memories(
-            GPTHelper.getContextGPTPlainMessages(self.bot, chatlog_context, settings.id_name_dict),
-            conversation=conversation)
+        context_memories = self.memory_manager.get_context_memories(chatlog_embed, conversation=conversation)
         if not convo_memories:
             convo_memories = self.memory_manager.get_memories_from_ids(conversation.get_memory_ids())
         convo_memories.extend(context_memories)
+        self.memory_manager.update_memories_score_from_memory_list(chatlog_embed, convo_memories)
         memory_str = self.memory_manager.get_memories_string(convo_memories)
 
 
@@ -115,58 +117,57 @@ class BotBrain:
         bot_inputs = [prompt.get_prompt(dynamic_prompts)]
         bot_inputs.extend(gpt_chatlog)
 
-        bot_commands: BotCommands = self.getBotCommands(bot_inputs)
+        prompt_str = bot_inputs[0] + '\n' + '\n'.join([str(x) for x in gpt_chatlog])
+        logger.debug("PROMPT START")
+        logger.debug(prompt_str)
+        logger.debug("PROMPT END")
+        response_str = self.prompt_bot(bot_inputs)
+        bot_commands: BotCommands = self.getBotCommands(response_str)
         logger.debug(f"Full response:\n{bot_commands.full_response}")
 
-        response_str = bot_commands.commands["RESPOND"][0] if "RESPOND" in bot_commands.commands else None
-        response_embed = GPTHelper.getEmbedding(response_str) if response_str else None
+        # response_embed = GPTHelper.getEmbedding(response_str) if response_str else None
         await self.execute_bot_commands(message, conversation, bot_commands,
-                                        response_str=response_str,
-                                        response_embed=response_embed,
+                                        compare_embed=chatlog_embed,
                                         full_response=bot_commands.full_response)
 
-        self.add_contextual_memory_if_best(convo_memories, context_memories, response_embed, conversation, bot_commands)
+        self.add_contextual_memory_if_best(convo_memories, context_memories, chatlog_embed, conversation, bot_commands)
+
         if self.vc_handler.is_connected() and message.channel == self.vc_handler.vc_text_channel:
+            response_str = bot_commands.commands["RESPOND"][0] if "RESPOND" in bot_commands.commands else None
             self.vc_handler.respond(response_str)
 
-    def add_contextual_memory_if_best(self, convo_memories, context_memories, response_embed, conversation, bot_commands):
-        if "RESPOND" not in bot_commands.commands or not response_embed:
+    def add_contextual_memory_if_best(self, convo_memories, context_memories, compare_embed, conversation, bot_commands):
+        if "RESPOND" not in bot_commands.commands or not compare_embed:
             return
 
         best_memory = None
         best_score = 0
         for m in convo_memories:
-            sim = cosine_similarity(response_embed, m.embedding)
+            sim = cosine_similarity(compare_embed, m.embedding)
             if sim > best_score:
                 best_memory = m
                 best_score = sim
             # auto fix memories not already scored
-            self.verify_and_fix_memory(m, response_embed, conversation)
+            self.verify_and_fix_memory(m, compare_embed)
 
         if best_memory in context_memories:
             conversation.context_stack.add_memory_to_contexts(best_memory)
             logger.info(
                 f"This context memory was relevant enough to be added to short-term memory:\n{str(best_memory)}")
 
-    def verify_and_fix_memory(self, m: Memory, response_embed: list, conversation: Conversation):
+    def verify_and_fix_memory(self, m: Memory, compare_embed: list):
         mem_changed = False
         before = m.string
         m.string = m.string.strip(' \n')
         if before != m.string:
             mem_changed = True
         if m.score == 0:
-            self.memory_manager.update_mem_score_from_response_embed(response_embed, m)
+            self.memory_manager.update_memories_score_from_memory_list(compare_embed, [m])
             mem_changed = True
         if mem_changed:
             self.memory_manager.save_memories_to_json()
 
     async def execute_bot_commands(self, message, conversation, bot_commands, **kwargs):
-        # TODO this kwarg stuff is gross, fix. maybe have commands take kwargs.
-        response_embed_key = "response_embed"
-        response_embed = None
-        if response_embed_key in kwargs:
-            response_embed = kwargs[response_embed_key]
-
         for c_name in bot_commands.commands:
             bot_commands.commands[c_name].append(kwargs)
 
@@ -185,7 +186,7 @@ class BotBrain:
             return self.currentConversations[message.channel.id]
         return None
 
-    def getBotCommands(self, inputs: list, temperature=None, freq_pen=None, model=None):
+    def prompt_bot(self, inputs: list, temperature=None, freq_pen=None, model=None):
         # gpt_chatlog is a list of
         #   dict openai json messages,
         #   strings (which will be user messages),
@@ -193,6 +194,9 @@ class BotBrain:
         gpt_input = GPTHelper.buildGPTMessageLog(*inputs)
         logger.debug(f"{inputs}")
         response_str = GPTHelper.promptGPT(gpt_input, temperature, freq_pen, model)["string"]
+        return response_str
+
+    def getBotCommands(self, response_str: str):
         return BotCommands(response_str)
 
     def startConversation(self, channel: Union[discord.DMChannel, discord.TextChannel],
