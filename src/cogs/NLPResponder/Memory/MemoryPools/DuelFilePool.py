@@ -1,4 +1,3 @@
-import abc
 import datetime
 import json
 import os.path
@@ -8,12 +7,14 @@ from copy import deepcopy
 import hnswlib
 import numpy as np
 from src.cogs.NLPResponder.Memory.Memory import Memory
+from src.cogs.NLPResponder.Memory.MemoryPool import MemoryEncoder, memory_decoder
 from src.helpers.logging_config import logger
 from src.helpers.StringMatchHelp import fuzzyMatchString
 from tqdm import tqdm
 
 DIM = 1536
 MAX_MEMORIES = 10000
+# DISTANCE_FUNC = 'l2'
 DISTANCE_FUNC = 'cosine'
 EF = 20
 EF_CONSTRUCTION = 200
@@ -21,35 +22,6 @@ M = 16
 
 HNSW_FILENAME = "hnsw.pkl"
 MEMORY_FILENAME = "memories_dict.json"
-
-
-# Custom encoder to serialize datetime objects
-class MemoryEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Memory):
-            d = deepcopy(obj.__dict__)
-            d["timestamp"] = obj.timestamp.isoformat()
-            return d
-        return super().default(obj)
-
-
-# Custom decoder to deserialize datetime objects
-def memory_decoder(obj):
-    if "embedding" in obj:
-        obj["timestamp"] = datetime.datetime.fromisoformat(obj["timestamp"])
-        m = Memory("", embedding=[])
-        m.__dict__.update(obj)
-        return m
-    else:
-        new_obj = {}
-        for k in obj.keys():
-            new_obj[int(k)] = obj[k]
-    return new_obj
-
-
-def get_similarity(hnsw, vec: list) -> float:
-    result = hnsw.knn_query(vec, k=1, filter=None)
-    return result[1].flatten()[0]
 
 
 def init_hnsw():
@@ -73,7 +45,7 @@ def init_hnsw():
     return hnsw
 
 
-class MemoryPool:
+class DuelFilePool:
     def __init__(self, save_path="data/",
                  memory_list_init_path=None):
         """
@@ -165,6 +137,10 @@ class MemoryPool:
         label_dist_list = list(zip(*result))
         return label_dist_list
 
+    def get_similarity(self, hnsw, vec: list) -> float:
+        result = hnsw.knn_query(vec, k=1, filter=None)
+        return result[1].flatten()[0]
+
     def get_similar_mem_ids(self, vec: list, k=5, **kwargs) -> list:
         # turn this into a normal list
         result = self.get_similar(vec, k=k, **kwargs)
@@ -201,7 +177,7 @@ class MemoryPool:
 
 
 def demo():
-    m = MemoryPool()
+    m = DuelFilePool()
     m.add(Memory("Steven is a butt", datetime.datetime.now()))
     m.add(Memory("Steven eats shoes", datetime.datetime.now()))
     m.add(Memory("Kristian likes forests", datetime.datetime.now()))

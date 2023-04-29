@@ -1,14 +1,25 @@
 version: '3'
 
 services:
-    app:
-        build:
-            context: .
-            dockerfile: Dockerfile
-        restart: always
-        volumes:
-            - ./data:/app/data:rw
-            - ./obj:/app/obj:rw
-            - ./logs:/app/logs:rw
-        env_file:
-            - .env
+  borisbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    volumes:
+      - ./data:/app/data:rw
+      - ./obj:/app/obj:rw
+      - ./logs:/app/logs:rw
+    env_file:
+      - .env
+  qdrant:
+    image: qdrant/qdrant
+    restart: always
+    ports:
+      - "6333:6333"
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    env_file:
+      - .env
+
+
