@@ -9,6 +9,7 @@ services:
         restart: always
         volumes:
             - ./data:/app/data:rw
+            - ./obj:/app/obj:rw
             - ./logs:/app/logs:rw
         env_file:
             - .env

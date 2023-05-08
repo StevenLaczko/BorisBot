@@ -77,7 +77,7 @@ class BotBrain:
         # get chatlog
         chatlog_context = await DiscordHelper.getContext(message.channel,
                                                          message,
-                                                         time_cutoff=timedelta(minutes=30),
+                                                         time_cutoff=timedelta(hours=1),
                                                          bot=self.bot,
                                                          max_context_words=max_context_words)
         chatlog_context.append(message)

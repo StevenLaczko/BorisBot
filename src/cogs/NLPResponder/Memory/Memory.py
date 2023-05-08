@@ -101,4 +101,4 @@ class Memory:
         return self.embedding[i]
 
     def __repr__(self):
-        return f"timestamp: {self.timestamp}, score: {self.score}, text: '{self.string}', embedding: {self.embedding[0:2]}..."
+        return f"id: {self.id}, timestamp: {self.timestamp}, score: {self.score}, text: '{self.string}'"

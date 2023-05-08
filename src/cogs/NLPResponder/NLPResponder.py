@@ -115,15 +115,17 @@ class NLPResponder(commands.Cog):
             await ctx.channel.send("The second argument needs to be either 'newest' or 'oldest'.")
             return
         sorted_mems = self.bot_brain.memory_manager.get_memory_list(num_mems, order == "newest")
-        await ctx.channel.send('\n'.join(sorted_mems))
+        await ctx.channel.send('\n'.join([str(x) for x in sorted_mems]))
 
     @commands.is_owner()
     @commands.command(name="delmemory", help="delmemory <id>")
     async def del_memory(self, ctx, mem_id):
+        mem_id = int(mem_id)
         try:
             self.bot_brain.memory_manager.delete_memory(mem_id)
         except KeyError:
             await ctx.channel.send("ID not found.")
+            return
         await ctx.channel.send("Memory deleted.")
 
     @commands.command(name="joinvc", help="Join a vc. Be in the vc, or give an id, or a channel mention.")
@@ -152,9 +154,9 @@ class NLPResponder(commands.Cog):
     async def stop_conversation(self, channel):
         if channel.type is discord.ChannelType.private:
             logger.info(
-                f"{CONVO_END_DELAY} passed. Ending convo in DM with {channel.recipient if channel.recipient else 'unknown user'}")
+                f"Ending convo in DM with {channel.recipient if channel.recipient else 'unknown user'}")
         else:
-            logger.info(f"{CONVO_END_DELAY} passed. Ending convo in {channel.name}")
+            logger.info(f"Ending convo in {channel.name}")
         self.bot_brain.currentConversations[channel.id] = None
 
     async def replyToMessage(self, message, conversation=None):
