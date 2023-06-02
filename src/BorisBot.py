@@ -21,7 +21,7 @@ MESSAGE_FLAG = "-m"
 MEMORY_FILE_PATH = "data/memories_dict.json"
 
 EXTENSIONS = [
-    "src.BorisCommands"
+    "src.BorisDiscordCommands"
 ]
 
 

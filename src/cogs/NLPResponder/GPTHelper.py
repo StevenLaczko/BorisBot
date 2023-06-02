@@ -7,7 +7,7 @@ import openai
 import pytz, datetime
 
 from src.helpers import DiscordBot
-from src.cogs.NLPResponder.BotCommands import BotCommands
+from src.cogs.NLPResponder.commands.BotCommands import BotCommands
 from src.helpers.logging_config import logger
 import os
 
@@ -179,7 +179,7 @@ REMEMBER_FREQ_PENALTY = 0
 MEMORY_WORD_COUNT_MAX = 300
 
 
-def promptGPT(gptMessages, temperature=None, frequency_penalty=None, model=None):
+def promptGPT(gpt_messages, temperature=None, frequency_penalty=None, model=None):
     if not temperature:
         temperature = TEMPERATURE
     if not frequency_penalty:
@@ -188,7 +188,7 @@ def promptGPT(gptMessages, temperature=None, frequency_penalty=None, model=None)
         model = "gpt-3.5-turbo"
     response = openai.ChatCompletion.create(
         model=model,
-        messages=gptMessages,
+        messages=gpt_messages,
         temperature=REMEMBER_TEMPERATURE,
         presence_penalty=REMEMBER_FREQ_PENALTY,
         frequency_penalty=REMEMBER_FREQ_PENALTY
@@ -244,8 +244,8 @@ def getMessageStr(bot, message: discord.Message, id_name_dict,
 
 def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[dict[str, str]]:
     result = []
+    is_role_defined = False
     if role is None:
-        logger.debug("Assuming 'user' role for GPT message creation.")
         role = Role.USER
     role = role.value
     if isinstance(_input, str):
@@ -255,10 +255,16 @@ def createGPTMessage(_input: Union[str, list, dict], role: Role = None) -> list[
         if isinstance(_input[0], str):
             for s in _input:
                 result.append({"role": role, "content": s})
+        # if already a GPT message,
         elif isinstance(_input[0], dict):
             result = _input
+            is_role_defined = True
     elif isinstance(_input, dict):
         result = [_input]
+        is_role_defined = True
+
+    if not is_role_defined:
+        logger.debug("Role not defined when creating GPT message. Assuming USER message.")
 
     return result
 
