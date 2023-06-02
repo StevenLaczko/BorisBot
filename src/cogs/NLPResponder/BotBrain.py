@@ -151,10 +151,13 @@ class BotBrain:
         logger.debug("PROMPT END")
         try:
             async with message.channel.typing():
-                response_str = self.prompt_bot(bot_inputs)
-        except (GPTExceptions.ContextLimitException, requests.RequestException) as e:
-            await message.add_reaction("❎")
+                response_str = await self.prompt_bot(bot_inputs)
+        except (GPTExceptions.ContextLimitException, asyncio.TimeoutError, requests.RequestException) as e:
+            # Log the exception details
+            print(f"Exception of type {type(e).__name__} occurred: {str(e)}")
+            await message.add_reaction('❌')
             return
+
         response_str = assistant_response_respond_prepend + response_str
         bot_commands: BotCommands = self.getBotCommands(response_str)
 
@@ -225,14 +228,14 @@ class BotBrain:
             return self.currentConversations[message.channel.id]
         return None
 
-    def prompt_bot(self, inputs: list, temperature=None, freq_pen=None, model=None):
+    async def prompt_bot(self, inputs: list, temperature=None, freq_pen=None, model=None):
         # gpt_chatlog is a list of
         #   dict openai json messages,
         #   strings (which will be user messages),
         #   or another list of one of the above
         gpt_input = GPTHelper.buildGPTMessageLog(*inputs)
         logger.debug(f"{gpt_input}")
-        response_str = GPTHelper.promptGPT(gpt_input, temperature, freq_pen, model)["string"]
+        response_str = (await GPTHelper.promptGPT(gpt_input, temperature, freq_pen, model))["string"]
 
 
         return response_str

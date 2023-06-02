@@ -39,6 +39,8 @@ class Settings:
         self._prefix = self._config["prefix"]
         self._memory_match_prob = self._config["memory_match_prob"]
         self._opus = self._config["opus"]
+        self._api_timeout = self._config["api_timeout"]
+        self._chat_temperature = self._config["chat_temperature"]
 
     @property
     def id_name_dict(self):
@@ -83,5 +85,13 @@ class Settings:
     @property
     def opus(self):
         return self._opus
+
+    @property
+    def api_timeout(self):
+        return self._api_timeout
+
+    @property
+    def chat_temperature(self):
+        return self._chat_temperature
 
 settings = Settings()

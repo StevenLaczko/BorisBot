@@ -1,3 +1,4 @@
+import asyncio
 import enum
 from typing import Union
 
@@ -11,6 +12,7 @@ from src import GPTExceptions
 from src.helpers import DiscordBot
 from src.cogs.NLPResponder.commands.BotCommands import BotCommands
 from src.helpers.logging_config import logger
+from src.helpers.Settings import settings
 import os
 
 
@@ -173,7 +175,7 @@ Joyful because Boris was finally able to finish his crossword puzzle
 ```
 """
 
-TEMPERATURE = 1.5
+TEMPERATURE = settings.chat_temperature
 FREQ_PENALTY = 1
 PRES_PENALTY = 1
 REMEMBER_TEMPERATURE = 0
@@ -181,7 +183,7 @@ REMEMBER_FREQ_PENALTY = 0
 MEMORY_WORD_COUNT_MAX = 300
 
 
-def promptGPT(gpt_messages, temperature=None, presence_penalty=None, frequency_penalty=None, model=None):
+async def promptGPT(gpt_messages, temperature=None, presence_penalty=None, frequency_penalty=None, model=None):
     if not temperature:
         temperature = TEMPERATURE
     if not presence_penalty:
@@ -190,13 +192,13 @@ def promptGPT(gpt_messages, temperature=None, presence_penalty=None, frequency_p
         frequency_penalty = FREQ_PENALTY
     if not model:
         model = "gpt-3.5-turbo"
-    response = openai.ChatCompletion.create(
+    response = await asyncio.wait_for(openai.ChatCompletion.acreate(
         model=model,
         messages=gpt_messages,
         temperature=temperature,
         presence_penalty=presence_penalty,
         frequency_penalty=frequency_penalty
-    )
+    ), timeout=settings.api_timeout)
 
     if response["choices"][0]["finish_reason"] == "limit":
         raise GPTExceptions.ContextLimitException()
@@ -457,14 +459,14 @@ async def getGPTPrompt(bot, message, message_context_list, conversation, memory_
 
 
 
-def getMood(bot, message_context_list, memory, id_name_dict) -> str:
+async def getMood(bot, message_context_list, memory, id_name_dict) -> str:
     chatlog = getContextGPTPlainMessages(bot, message_context_list, id_name_dict)
     prompt = buildGPTMessageLog(getMemoryString(memory),
                                 chatlog,
                                 MOOD_PREPROMPT,
                                 MOOD_FORMAT_COMMANDS,
                                 CONFIRM_UNDERSTANDING)
-    result = promptGPT(prompt)["string"]
+    result = await promptGPT(prompt)["string"]
     return result
 
 
@@ -495,11 +497,11 @@ def organizeMemories(memory: list, max_memory_words, explain=False):
     return memory
 
 
-def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
+async def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
     memory_str = '\n'.join(memory)
     memory_message = createGPTMessage(memory_str, Role.USER)
     prompt = buildGPTMessageLog(memory_message, MEMORY_SMALL_FORMAT_SHRINK_PROMPT, CONFIRM_UNDERSTANDING)
-    response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
+    response: str = await promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
     memory = []
     for m in response.split('\n'):
@@ -508,10 +510,10 @@ def minimizeMemoryWordCount(memory: list, max_memory_words, explain=False):
     logger.info("Shrunk memories.")
 
 
-def combineMemories(memory):
+async def combineMemories(memory):
     memory_str = '\n'.join(memory)
     prompt = buildGPTMessageLog(memory_str, MEMORY_COMBINE_PROMPT)
-    response: str = promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
+    response: str = await promptGPT(prompt, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
 
     memory = []
     for m in response.split('\n'):
@@ -589,7 +591,7 @@ If you understand, type '.' once."""},
     return result if success else None
 
 
-def rememberGPT(bot, message_context_list, id_name_dict):
+async def rememberGPT(bot, message_context_list, id_name_dict):
     openai.organization = "org-krbYtBCMpqjt230YuGZjxzVI"
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
@@ -613,7 +615,7 @@ def rememberGPT(bot, message_context_list, id_name_dict):
     else:
         raise ValueError("Context chatlog for creating memory shouldn't be empty.")
 
-    memory_str: str = promptGPT(gpt_messages, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
+    memory_str: str = await promptGPT(gpt_messages, REMEMBER_TEMPERATURE, REMEMBER_FREQ_PENALTY)["string"]
     if memory_str == '.':
         memory_str = ""
     logger.info(f"Memory: {memory_str}")
