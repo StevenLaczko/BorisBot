@@ -5,7 +5,7 @@ from ordered_set import OrderedSet
 from src.cogs.NLPResponder.Memory.Memory import Memory
 from src.helpers.logging_config import logger
 
-MAX_MEMORIES = 8
+MAX_MEMORIES = 5
 
 
 class Context:
