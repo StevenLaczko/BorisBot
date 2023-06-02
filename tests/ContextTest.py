@@ -3,7 +3,7 @@ import unittest
 
 from src.cogs.NLPResponder.Context import Context
 from src.cogs.NLPResponder.Memory.MemoryPool import MemoryPool
-from src.cogs.NLPResponder.commands import BorisCommands
+from src import BorisCommands
 
 context_dict = """{
   "MEMORY_IDS": [],
