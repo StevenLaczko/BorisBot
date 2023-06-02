@@ -94,14 +94,14 @@ class MemoryManager:
         conversation.add_memory(m, compare_str=compare_str, compare_embed=compare_embed)
         return m
 
-    def get_context_memories(self, embed: list, id_memory_dict=None, conversation=None) -> list[Memory]:
+    def get_context_memories(self, embed: list, id_memory_dict=None, conversation=None, n=3) -> list[Memory]:
         memory_ids = None
         if id_memory_dict or conversation:
             memory_ids = id_memory_dict.keys() if id_memory_dict else conversation.get_memory_ids()
         if memory_ids:
-            context_memories_ids = self.get_similar_mem_ids_from_embed(embed, k=3, filter=lambda x: x not in memory_ids)
+            context_memories_ids = self.get_similar_mem_ids_from_embed(embed, k=n, filter=lambda x: x not in memory_ids)
         else:
-            context_memories_ids = self.get_similar_mem_ids_from_embed(embed, k=3, filter=lambda x: x not in memory_ids)
+            context_memories_ids = self.get_similar_mem_ids_from_embed(embed, k=n, filter=lambda x: x not in memory_ids)
         context_memories = self.get_memories_from_ids(context_memories_ids)
         logger.info("Contextual memories:\n" + '\n'.join([str(m) for m in context_memories]))
         return context_memories
