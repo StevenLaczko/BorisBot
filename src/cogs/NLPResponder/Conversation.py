@@ -1,11 +1,10 @@
 import datetime
-
 import discord
 
 from src.cogs.NLPResponder import GPTHelper
 from src.cogs.NLPResponder.Context import Context
 from src.cogs.NLPResponder.ContextStack import ContextStack
-from threading import Lock
+from src.helpers.logging_config import logger
 
 from src.cogs.NLPResponder.Memory.Memory import Memory
 from src.cogs.NLPResponder.Memory.Memory import cosine_similarity
@@ -21,8 +20,10 @@ class Conversation:
         self.context_stack: ContextStack = context_stack if context_stack else self.init_context_stack()
         self.goal = ""
         self.num_msg_since_response = 0
-        self.users = {}
-        self.mutex = Lock() # use with mutex: for getting replying so he doesn't reply to a bunch of stuff in a row
+        self.user_num_messages_since_last_msg = {}
+        self.responding_task = None
+        #I think I want to cancel his current response when he gets a new message instead. He'll make a lot more sense.
+        #self.mutex = Lock() # use with mutex: for getting replying so he doesn't reply to a bunch of stuff in a row
 
     def init_context_stack(self):
         return ContextStack(self.context_dict, self.memory_manager)
@@ -40,9 +41,16 @@ class Conversation:
     def update_memory_scores_from_embed(self, response_embed: list):
         self.memory_manager.update_memories_scores_from_ids(response_embed, self.context_stack.get_memory_ids())
 
+    def should_reply_to_convo_message(self):
+        logger.warning("Message received in convo channel")
+        self.timestamp = datetime.datetime.now()
+        if self.num_msg_since_response >= self.get_num_users():
+            logger.info(f"msgs since response: {self.num_msg_since_response}\nnum users in convo: {self.get_num_users()}")
+            return True
+        return False
 
     def get_num_users(self):
-        return len(self.users)
+        return len(self.user_num_messages_since_last_msg)
 
     def has_message(self, message: discord.Message):
         if message in self.channel:

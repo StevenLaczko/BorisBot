@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import os
@@ -81,13 +82,14 @@ class NLPResponder(commands.Cog):
             await self.replyToMessage(message, conversation)
         elif "boris" in message.clean_content.lower():
             logger.warning("I heard my name.")
-            if conversation or 0.2 > random.random():
+            if conversation or 0.05 > random.random():
                 await self.replyToMessage(message)
-        elif conversation:
-            logger.warning("Message received in convo channel")
-            conversation.timestamp = datetime.datetime.now()
-            if 0.3 > random.random() or conversation.num_msg_since_response >= conversation.get_num_users():
-                await self.replyToMessage(message, conversation)
+        elif conversation and conversation.should_reply_to_convo_message():
+            if conversation.responding_task:
+                logger.info("Message received, canceling and restarting response.")
+                conversation.responding_task.cancel()
+                conversation.responding_task = None
+            await self.replyToMessage(message, conversation)
         # TODO 5% chance asks GPT if it's relevant to Boris or his memories
         elif 0.0005 > random.random():
             await self.replyToMessage(message, conversation)
@@ -157,5 +159,4 @@ class NLPResponder(commands.Cog):
         logger.info("Responding")
         if not conversation:
             conversation = self.bot_brain.create_conversation(message.channel)
-        async with message.channel.typing():
-            await self.bot_brain.reply(message, conversation)
+        conversation.responding_task = asyncio.create_task(self.bot_brain.reply(message, conversation))

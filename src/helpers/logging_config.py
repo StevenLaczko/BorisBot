@@ -10,6 +10,8 @@ if settings["log_level"] == "info":
     log_level = logging.INFO
 elif settings["log_level"] == "debug":
     log_level = logging.DEBUG
+else:
+    log_level = logging.WARNING
 logger = logging.getLogger("main")
 logger.setLevel(log_level)
 # Create a rotating file handler

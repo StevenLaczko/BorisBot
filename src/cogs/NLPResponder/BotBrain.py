@@ -1,10 +1,13 @@
+import asyncio
 import json
 import os
 from datetime import datetime, timedelta
 from typing import Union
 
 import discord
+import requests
 
+from src import GPTExceptions
 from src.cogs.NLPResponder import DiscordHelper, GPTHelper
 from src.cogs.NLPResponder.Memory.MemoryManager import MemoryManager
 from src.cogs.NLPResponder.commands.BotCommands import BotCommands
@@ -81,8 +84,14 @@ class BotBrain:
         if not max_context_words:
             max_context_words = settings.max_context_words
 
-        conversation.users[message.author.id] = True
-        conversation.num_msg_since_response = 0
+        if asyncio.current_task().cancelled():
+            logger.info("Cancelled reply successfully.")
+            return
+
+        conversation.user_num_messages_since_last_msg[message.author.id] = 0
+        for user, num_msgs_since_last_sent_msg in conversation.user_num_messages_since_last_msg.items():
+            if num_msgs_since_last_sent_msg > 10:
+                del conversation.user_num_messages_since_last_msg[user]
 
         # get chatlog
         chatlog_context = await DiscordHelper.getContext(message.channel,
@@ -107,6 +116,10 @@ class BotBrain:
                                                                  write_user_name=False)
         chatlog_embed = GPTHelper.getEmbedding(chatlog_plaintext)
 
+        if asyncio.current_task().cancelled():
+            logger.info("Cancelled reply successfully.")
+            return
+
         # get memories
         context_memories = self.memory_manager.get_context_memories(chatlog_embed, conversation=conversation, n=3)
         if not convo_memories:
@@ -115,6 +128,9 @@ class BotBrain:
         self.memory_manager.update_memories_score_from_memory_list(chatlog_embed, convo_memories)
         memory_str = self.memory_manager.get_memories_string(convo_memories)
 
+        if asyncio.current_task().cancelled():
+            logger.info("Cancelled reply successfully.")
+            return
 
         # get prompt, build llm inputs
         prompt: Prompt = conversation.get_prompt(message, conversation)
@@ -126,13 +142,26 @@ class BotBrain:
         }
         bot_inputs = [prompt.get_prompt(dynamic_prompts)]
         bot_inputs.extend(gpt_chatlog)
+        assistant_response_respond_prepend = "!RESPOND "
+        bot_inputs.extend(GPTHelper.createGPTMessage(assistant_response_respond_prepend, GPTHelper.Role.ASSISTANT))
 
         prompt_str = bot_inputs[0] + '\n' + '\n'.join([str(x) for x in gpt_chatlog])
         logger.debug("PROMPT START")
         logger.debug(prompt_str)
         logger.debug("PROMPT END")
-        response_str = self.prompt_bot(bot_inputs)
+        try:
+            async with message.channel.typing():
+                response_str = self.prompt_bot(bot_inputs)
+        except (GPTExceptions.ContextLimitException, requests.RequestException) as e:
+            await message.add_reaction("❎")
+            return
+        response_str = assistant_response_respond_prepend + response_str
         bot_commands: BotCommands = self.getBotCommands(response_str)
+
+        if asyncio.current_task().cancelled():
+            logger.info("Cancelled reply successfully.")
+            return
+
         logger.debug(f"Full response:\n{bot_commands.full_response}")
 
         # response_embed = GPTHelper.getEmbedding(response_str) if response_str else None
@@ -204,6 +233,8 @@ class BotBrain:
         gpt_input = GPTHelper.buildGPTMessageLog(*inputs)
         logger.debug(f"{gpt_input}")
         response_str = GPTHelper.promptGPT(gpt_input, temperature, freq_pen, model)["string"]
+
+
         return response_str
 
     def getBotCommands(self, response_str: str):

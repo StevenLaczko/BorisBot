@@ -5,7 +5,9 @@ import discord
 import dotenv
 import openai
 import pytz, datetime
+import requests
 
+from src import GPTExceptions
 from src.helpers import DiscordBot
 from src.cogs.NLPResponder.commands.BotCommands import BotCommands
 from src.helpers.logging_config import logger
@@ -193,6 +195,11 @@ def promptGPT(gpt_messages, temperature=None, frequency_penalty=None, model=None
         presence_penalty=REMEMBER_FREQ_PENALTY,
         frequency_penalty=REMEMBER_FREQ_PENALTY
     )
+
+    if response["choices"][0]["finish_reason"] == "limit":
+        raise GPTExceptions.ContextLimitException()
+    elif response["choices"][0]["finish_reason"] != "stop":
+        raise requests.RequestException("Model is probably overloaded.")
 
     return {"string": response["choices"][0]["message"]["content"].strip(), "object": response}
 
