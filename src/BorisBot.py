@@ -1,8 +1,6 @@
-import json
-
-import RunBoris
 from src.helpers import DiscordBot
 from src.cogs import Respondtron, MemeGrabber, ReminderCog
+from src.cogs.NLPResponder import NLPResponder
 
 BOT_PREFIX = '~'
 
@@ -19,8 +17,11 @@ RESPONDTRON_ARGS = {Respondtron.ARGS.WEIGHTS: WEIGHTS,
 REMINDER_FILE_NAME = "reminders.pkl"
 MESSAGE_FLAG = "-m"
 
+# NLPResponder
+MEMORY_FILE_PATH = "data/memories_dict.json"
+
 EXTENSIONS = [
-    "src.BorisCommands"
+    "src.BorisDiscordCommands"
 ]
 
 
@@ -29,8 +30,9 @@ EXTENSIONS = [
 
 
 class Boris(DiscordBot.DiscordBot):
-    def __init__(self, bot_prefix=BOT_PREFIX, settings=None):
-        super().__init__(bot_prefix, settings)
+    def __init__(self, bot_prefix=BOT_PREFIX, settings_path=None):
+        super().__init__(bot_prefix, settings_path)
+        self.settings_path = settings_path
 
         self.event(self.on_member_join)
 
@@ -39,19 +41,14 @@ class Boris(DiscordBot.DiscordBot):
         await super().on_ready()
         await self.load_extensions(EXTENSIONS)
         await self.add_default_cogs()
-        self.update_settings_file()
 
     async def add_default_cogs(self):
         await self.add_cogs([
-            Respondtron.Respondtron(self, BOT_PREFIX, botNoResponse=RESPONDTRON_NO_RESPONSE),
+            NLPResponder.NLPResponder(self, BOT_PREFIX, memory_filepath=MEMORY_FILE_PATH, memory_list_init=None),
+            Respondtron.Respondtron(self),
             MemeGrabber.MemeGrabber(self),
             ReminderCog.ReminderCog(self, REMINDER_FILE_NAME, MESSAGE_FLAG)
         ])
-
-    def update_settings_file(self):
-        # update settings file on startup
-        with open(RunBoris.SETTINGS_FILE, 'w') as f:
-            json.dump(self.settings, f, indent=1)
 
     async def on_member_join(self, member):
         await self.send_message(658114649081774093, "<@!" + member.id + "> :gunworm:")
