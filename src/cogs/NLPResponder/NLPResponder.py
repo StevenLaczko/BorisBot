@@ -2,18 +2,12 @@ import datetime
 import json
 import os
 import random
-from typing import Union
 
 import discord
-import pytz
 from discord.ext import commands
 
-import src.cogs.NLPResponder.GPTHelper as GPTHelper
 from src.cogs.NLPResponder.BotBrain import BotBrain
-from src.cogs.NLPResponder.BotCommands import BotCommands
-from src.cogs.NLPResponder.Context import Context
-from src.cogs.NLPResponder.Conversation import Conversation
-from src.cogs.NLPResponder.commands import BorisCommands
+from src import BorisCommands
 from src.helpers import DiscordBot
 from src.helpers.logging_config import logger
 
@@ -122,7 +116,7 @@ class NLPResponder(commands.Cog):
     async def del_memory(self, ctx, mem_id):
         mem_id = int(mem_id)
         try:
-            self.bot_brain.memory_manager.delete_memory(mem_id)
+            self.bot_brain.delete_memory(mem_id)
         except KeyError:
             await ctx.channel.send("ID not found.")
             return

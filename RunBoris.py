@@ -6,7 +6,7 @@ from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 import os
 
-from src import Boris
+from src import BorisBot
 
 SETTINGS_FILE = "data/settings.json"
 
@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
     with open(SETTINGS_FILE, 'r') as f:
         settings = json.load(f)
-    bot = Boris.Boris(settings_path=settings)
+    bot = BorisBot.Boris(settings_path=settings)
     bot.run(TOKEN)
 
 

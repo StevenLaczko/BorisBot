@@ -7,7 +7,7 @@ import discord
 
 from src.cogs.NLPResponder import DiscordHelper, GPTHelper
 from src.cogs.NLPResponder.Memory.MemoryManager import MemoryManager
-from src.cogs.NLPResponder.BotCommands import BotCommands
+from src.cogs.NLPResponder.commands.BotCommands import BotCommands
 from src.cogs.NLPResponder.Context import Context
 from src.cogs.NLPResponder.Memory.Memory import Memory, cosine_similarity
 from src.cogs.NLPResponder.Prompt import Prompt
@@ -59,6 +59,16 @@ class BotBrain:
         new_conversation = Conversation(channel, self.memory_manager, context_dict=self.contexts)
         self.currentConversations[channel.id] = new_conversation
         return new_conversation
+
+    def delete_memory(self, mem_id):
+        #TODO implement those two funcs
+        for c in self.contexts.values():
+            if mem_id in c.get_memory_ids():
+                c.remove_memory_with_id(mem_id)
+        for convo in self.currentConversations.values():
+            if mem_id in convo.get_memory_ids():
+                convo.remove_memory_with_id(mem_id)
+        self.memory_manager.delete_memory(mem_id)
 
     async def reply(self,
                     message: discord.Message,

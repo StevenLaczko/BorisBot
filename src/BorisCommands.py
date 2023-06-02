@@ -1,22 +1,52 @@
-from discord.ext import commands
+import discord
+
+from src.cogs.NLPResponder.BotBrain import BotBrain
+from src.cogs.NLPResponder.commands.ICommand import ICommand
+from src.cogs.NLPResponder.Conversation import Conversation
 
 
-@commands.command(help="For planning on the weekend. You sir have to ping everyone, though.")
-async def plan(ctx):
-    print("Planning")
-    planReactions = ['🇫', '🇸', '🌞', '❌']
+class RESPONDCommand(ICommand):
+    def _parse(self, command_input: list, **kwargs) -> list:
+        return command_input
 
-    msg = await ctx.send("Howdy! Les all gather up and spend some quality time together.\n"
-                         "Click them emojis correspondin' to the days you're free.")
-    reactions = planReactions
-    # reactions_names = ["regional_indicator_f", "regional_indicator_s", "sun_with_face"]
-    # for reaction in reactions_names: reactions.append(discord.utils.get(bot.emojis, name=reaction))
-    print(reactions)
-    for dayReaction in reactions:
-        if dayReaction:
-            await msg.add_reaction(dayReaction)
+    async def _execute(self, bot_brain, message, conversation, args, **kwargs):
+        message_str = args[0]
+        full_bot_response = kwargs["full_response"] if "full_response" in kwargs else None
+        msg = await conversation.channel.send(message_str)
+        conversation.replace_conversation_msg_by_id(msg.id, full_bot_response)
 
 
-async def setup(bot):
-    print("Adding Boris commands.")
-    bot.add_command(plan)
+class REMEMBERCommand(ICommand):
+    def _parse(self, command_input: list, **kwargs) -> list:
+        return command_input
+
+    async def _execute(self, bot_brain, message: discord.Message, conversation: Conversation, args, **kwargs):
+        memory_list = args
+        bot_response_msg: str = kwargs["response_str"] if "response_str" in kwargs else None
+        do_emoji = True
+        if do_emoji:
+            await message.add_reaction('🤔')
+        for mem in memory_list:
+            await bot_brain.memory_manager.save_memory(mem, conversation, compare_embed=kwargs["compare_embed"])
+
+
+class MOODCommand(ICommand):
+    def _parse(self, command_input: list, **kwargs) -> list:
+        return command_input
+
+    async def _execute(self, bot_brain: BotBrain, message, conversation: Conversation, args, **kwargs):
+        bot_brain.mood = args[0]
+        return args[0]
+
+
+class NEW_GOALCommand(ICommand):
+    def _parse(self, command_input: list, **kwargs) -> list:
+        return command_input
+
+    async def _execute(self, bot_brain: BotBrain, message, conversation: Conversation, args, **kwargs):
+        conversation.goal = args[0]
+        await message.add_reaction('🫵')
+
+
+
+commands = [RESPONDCommand(), REMEMBERCommand(), MOODCommand(), NEW_GOALCommand()]

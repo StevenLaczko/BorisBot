@@ -2,7 +2,7 @@ import abc
 from abc import ABC, abstractmethod
 
 
-class Command(ABC):
+class ICommand(ABC):
     @abstractmethod
     def _parse(self, command_input: list, **kwargs) -> list:
         pass
