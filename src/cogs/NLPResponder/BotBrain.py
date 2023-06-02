@@ -98,7 +98,7 @@ class BotBrain:
         chatlog_embed = GPTHelper.getEmbedding(chatlog_plaintext)
 
         # get memories
-        context_memories = self.memory_manager.get_context_memories(chatlog_embed, conversation=conversation)
+        context_memories = self.memory_manager.get_context_memories(chatlog_embed, conversation=conversation, n=3)
         if not convo_memories:
             convo_memories = self.memory_manager.get_memories_from_ids(conversation.get_memory_ids())
         convo_memories.extend(context_memories)
@@ -192,7 +192,7 @@ class BotBrain:
         #   strings (which will be user messages),
         #   or another list of one of the above
         gpt_input = GPTHelper.buildGPTMessageLog(*inputs)
-        logger.debug(f"{inputs}")
+        logger.debug(f"{gpt_input}")
         response_str = GPTHelper.promptGPT(gpt_input, temperature, freq_pen, model)["string"]
         return response_str
 

@@ -95,7 +95,7 @@ class NLPResponder(commands.Cog):
             if 0.3 > random.random() or conversation.num_msg_since_response >= conversation.get_num_users():
                 await self.replyToMessage(message, conversation)
         # TODO 5% chance asks GPT if it's relevant to Boris or his memories
-        elif 0.05 > random.random():
+        elif 0.0005 > random.random():
             await self.replyToMessage(message, conversation)
 
     # COMMANDS
