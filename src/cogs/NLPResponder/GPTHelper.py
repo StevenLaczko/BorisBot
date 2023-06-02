@@ -173,7 +173,7 @@ Joyful because Boris was finally able to finish his crossword puzzle
 ```
 """
 
-TEMPERATURE = 2
+TEMPERATURE = 1.5
 FREQ_PENALTY = 1
 PRES_PENALTY = 1
 REMEMBER_TEMPERATURE = 0
@@ -181,9 +181,11 @@ REMEMBER_FREQ_PENALTY = 0
 MEMORY_WORD_COUNT_MAX = 300
 
 
-def promptGPT(gpt_messages, temperature=None, frequency_penalty=None, model=None):
+def promptGPT(gpt_messages, temperature=None, presence_penalty=None, frequency_penalty=None, model=None):
     if not temperature:
         temperature = TEMPERATURE
+    if not presence_penalty:
+        presence_penalty = PRES_PENALTY
     if not frequency_penalty:
         frequency_penalty = FREQ_PENALTY
     if not model:
@@ -191,9 +193,9 @@ def promptGPT(gpt_messages, temperature=None, frequency_penalty=None, model=None
     response = openai.ChatCompletion.create(
         model=model,
         messages=gpt_messages,
-        temperature=REMEMBER_TEMPERATURE,
-        presence_penalty=REMEMBER_FREQ_PENALTY,
-        frequency_penalty=REMEMBER_FREQ_PENALTY
+        temperature=temperature,
+        presence_penalty=presence_penalty,
+        frequency_penalty=frequency_penalty
     )
 
     if response["choices"][0]["finish_reason"] == "limit":
