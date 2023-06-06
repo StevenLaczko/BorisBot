@@ -23,14 +23,27 @@ from src.helpers.logging_config import logger
 
 
 class BotBrain:
+    """
+    A BotBrain object is the core of a chatbot.
+    It holds onto memory information, commands, current conversations, contexts, etc.
+    """
     def __init__(self, bot,
-                 memory_match_prob=0.8,
                  context_dir="data/contexts/",
                  context_files=None,
                  commands=None,
                  memory_file_path="data/memories_dict.json",
                  memory_list_init=None,
                  hnsw_file_path="data/hnsw.pkl"):
+        """
+
+        :param bot: The discord "bot" object belonging to the chatbot.
+        :param context_dir: The directory where context json files are stored.
+        :param context_files:
+        :param commands:
+        :param memory_file_path:
+        :param memory_list_init:
+        :param hnsw_file_path:
+        """
         self.bot: DiscordBot = bot
         self.contexts_dir = context_dir
         self.context_files = context_files
@@ -38,8 +51,7 @@ class BotBrain:
         self.hnsw_file_path = hnsw_file_path
         self.currentConversations: dict[int, Union[Conversation, None]] = {}
         self.memory_manager: MemoryManager = MemoryManager(memory_file_path, hnsw_file_path,
-                                                           memory_list_init=memory_list_init,
-                                                           context_files=context_files)
+                                                           memory_list_init=memory_list_init)
         self.contexts: dict[str, Context] = self.load_contexts()
         self.mood: str = ""
         self.vc_handler = VCHandler()

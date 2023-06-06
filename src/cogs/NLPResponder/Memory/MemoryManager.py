@@ -10,9 +10,9 @@ from src.cogs.NLPResponder.Memory.MemoryPool import get_similarity
 
 
 class MemoryManager:
-    def __init__(self, memory_file_path, hnsw_file_path, memory_list_init=None, context_files=None):
-        self._memory_pool: MemoryPool = MemoryPool(
-            memory_list_init_path=memory_list_init,
+    def __init__(self, memory_file_path, hnsw_file_path, memory_list_init=None):
+        self._memory_pool: MemoryPool = MemoryPool(memory_file_path=memory_file_path, hnsw_file_path=hnsw_file_path,
+            memory_list_init_path=memory_list_init
         )
 
     def get_memory_from_id(self, memory_id):
