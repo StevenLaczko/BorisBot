@@ -25,30 +25,28 @@ from src.helpers.logging_config import logger
 class BotBrain:
     def __init__(self, bot,
                  memory_match_prob=0.8,
-                 context_dir="data/contexts/",
                  context_files=None,
                  commands=None,
                  memory_file_path="data/memories_dict.json",
                  memory_list_init=None,
                  hnsw_file_path="data/hnsw.pkl"):
         self.bot: DiscordBot = bot
-        self.contexts_dir = context_dir
         self.context_files = context_files
         self.commands = commands
         self.hnsw_file_path = hnsw_file_path
         self.currentConversations: dict[int, Union[Conversation, None]] = {}
-        self.memory_manager: MemoryManager = MemoryManager(memory_file_path, hnsw_file_path,
-                                                           memory_list_init=memory_list_init,
-                                                           context_files=context_files)
+        self.memory_manager: MemoryManager = MemoryManager(memory_file_path, hnsw_file_path, memory_list_init=memory_list_init, context_files=context_files)
         self.contexts: dict[str, Context] = self.load_contexts()
         self.mood: str = ""
         self.vc_handler = VCHandler()
 
-    def load_contexts(self) -> dict[str, Context]:
+    def load_contexts(self, context_files=None) -> dict[str, Context]:
+        if not context_files:
+            context_files = self.context_files
+        print(f"context_files: {context_files}")
         contexts = {}
-        for path in self.context_files:
-            c_path = os.path.join(self.contexts_dir, path)
-            new_context = self.create_context_from_json(c_path, self.commands)
+        for path in context_files:
+            new_context = self.create_context_from_json(path, self.commands)
             contexts[new_context.name] = new_context
         return contexts
 
@@ -142,16 +140,18 @@ class BotBrain:
         }
         bot_inputs = [prompt.get_prompt(dynamic_prompts)]
         bot_inputs.extend(gpt_chatlog)
-        assistant_response_respond_prepend = "!RESPOND "
+        assistant_response_respond_prepend = ""
         bot_inputs.extend(GPTHelper.createGPTMessage(assistant_response_respond_prepend, GPTHelper.Role.ASSISTANT))
 
         prompt_str = bot_inputs[0] + '\n' + '\n'.join([str(x) for x in gpt_chatlog])
         logger.debug("PROMPT START")
         logger.debug(prompt_str)
         logger.debug("PROMPT END")
+
+        chat_temp = conversation.context_stack.get_temperature()
         try:
             async with message.channel.typing():
-                response_str = await self.prompt_bot(bot_inputs)
+                response_str = await self.prompt_bot(bot_inputs, temperature=chat_temp)
         except (GPTExceptions.ContextLimitException, asyncio.TimeoutError, requests.RequestException) as e:
             # Log the exception details
             print(f"Exception of type {type(e).__name__} occurred: {str(e)}")

@@ -50,6 +50,9 @@ class ContextStack(OrderedSet):
             prompt.stack(c)
         return prompt
 
+    def get_temperature(self):
+        return self[-1].temperature
+
     def get_memory_ids(self) -> list[int]:
         ids: list[int] = []
         for context in self:

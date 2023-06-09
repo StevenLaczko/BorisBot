@@ -18,11 +18,15 @@ class Context:
         self._memory: OrderedSet = OrderedSet(memory) if memory else OrderedSet()
         self._triggers = triggers
         self.commands: dict = None
+        self.temperature = None
         if context_dict:
             self.init_context(context_dict, command_funcs)
 
     def init_context(self, d, funcs):
         self.name = d["NAME"]
+
+        if "TEMPERATURE" in d and not self.temperature:
+            self.temperature = d["TEMPERATURE"]
 
         ids = [x for x in d["MEMORY_IDS"]]
         for mem_id in ids:

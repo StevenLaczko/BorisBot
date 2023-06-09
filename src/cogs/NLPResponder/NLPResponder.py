@@ -27,9 +27,8 @@ class NLPResponder(commands.Cog):
         self.bot = bot
         self.prefix: str = prefix
         self.memory_file_path = DiscordBot.getFilePath(memory_filepath)
-        context_dir = "data/contexts/"
-        c_files = ["main-context.json"]
-        self.bot_brain = BotBrain(self.bot, context_dir=context_dir, context_files=c_files, commands=BorisCommands.commands, memory_file_path=memory_filepath, memory_list_init=memory_list_init)
+        c_files = ["data/contexts/normal-context.json"]
+        self.bot_brain = BotBrain(self.bot, context_files=c_files, commands=BorisCommands.commands, memory_file_path=memory_filepath, memory_list_init=memory_list_init)
         self.vc = None
 
         # load memories

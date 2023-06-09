@@ -35,7 +35,12 @@ class MOODCommand(ICommand):
         return command_input
 
     async def _execute(self, bot_brain: BotBrain, message, conversation: Conversation, args, **kwargs):
-        bot_brain.mood = args[0]
+        if "SERIOUS" in args[0]:
+            bot_brain.load_contexts(["data/contexts/serious-context.json"])
+        elif "NORMAL" in args[0]:
+            bot_brain.load_contexts(["data/contexts/normal-context.json"])
+        elif "CRAZY" in args[0]:
+            bot_brain.load_contexts(["data/contexts/crazy-context.json"])
         return args[0]
 
 

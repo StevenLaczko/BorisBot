@@ -192,6 +192,7 @@ async def promptGPT(gpt_messages, temperature=None, presence_penalty=None, frequ
         frequency_penalty = FREQ_PENALTY
     if not model:
         model = "gpt-3.5-turbo"
+    logger.info(f"Prompting with temp = {temperature}")
     response = await asyncio.wait_for(openai.ChatCompletion.acreate(
         model=model,
         messages=gpt_messages,
