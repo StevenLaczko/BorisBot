@@ -8,6 +8,8 @@ with open("data/settings.json", 'r') as f:
 
 if settings["log_level"] == "info":
     log_level = logging.INFO
+elif settings["log_level"] == "error":
+    log_level = logging.ERROR
 elif settings["log_level"] == "debug":
     log_level = logging.DEBUG
 else:
