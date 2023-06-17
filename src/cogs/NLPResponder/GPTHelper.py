@@ -380,7 +380,8 @@ def getMoodString(mood: str):
 
 def getMessageableString(messageable: discord.abc.Messageable, id_name_dict):
     if isinstance(messageable, discord.TextChannel):
-        return f"You are talking in the {messageable.name} channel."
+        #return f"You are talking in the {messageable.name} channel."
+        return ""
     elif isinstance(messageable, discord.DMChannel):
         if messageable.recipient:
             return f"You are talking privately with {getUserNameAndNick(messageable.recipient, id_name_dict)}"

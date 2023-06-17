@@ -166,7 +166,7 @@ class BotBrain:
                 response_str = await self.prompt_bot(bot_inputs)
         except (GPTExceptions.ContextLimitException, asyncio.TimeoutError, requests.RequestException) as e:
             # Log the exception details
-            print(f"Exception of type {type(e).__name__} occurred: {str(e)}")
+            logger.error(f"Exception of type {type(e).__name__} occurred: {str(e)}")
             await message.add_reaction('❌')
             return
 
