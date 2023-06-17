@@ -140,18 +140,21 @@ class BotBrain:
             "MEMORY": memory_str,
             "GOAL_INFO": f"Current goal: {conversation.goal}" if conversation.goal else "Current goal: Chat"
         }
-        bot_inputs = [prompt.get_prompt(dynamic_prompts)]
-        bot_inputs.extend(gpt_chatlog)
-        assistant_response_respond_prepend = "!RESPOND "
-        bot_inputs.extend(GPTHelper.createGPTMessage(assistant_response_respond_prepend, GPTHelper.Role.ASSISTANT))
+        sys_prompt, user_prompt = prompt.get_prompt(dynamic_prompts)
+        bot_sys_input = [sys_prompt]
+        bot_user_input = [user_prompt]
+        bot_user_input.extend(gpt_chatlog)
+        assistant_response_respond_prepend = ""
+        if len(assistant_response_respond_prepend) > 0:
+            user_inputs.extend(GPTHelper.createGPTMessage(assistant_response_respond_prepend, GPTHelper.Role.ASSISTANT))
 
-        prompt_str = bot_inputs[0] + '\n' + '\n'.join([str(x) for x in gpt_chatlog])
+        prompt_str = bot_user_input[0] + '\n' + bot_sys_input[0] + '\n'.join([str(x) for x in gpt_chatlog])
         logger.debug("PROMPT START")
         logger.debug(prompt_str)
         logger.debug("PROMPT END")
         try:
             async with message.channel.typing():
-                response_str = await self.prompt_bot(bot_inputs)
+                response_str = await self.prompt_bot(bot_user_input, system_inputs=bot_sys_input)
         except (GPTExceptions.ContextLimitException, asyncio.TimeoutError, requests.RequestException) as e:
             # Log the exception details
             logger.error(f"Exception of type {type(e).__name__} occurred: {str(e)}")
@@ -228,12 +231,12 @@ class BotBrain:
             return self.currentConversations[message.channel.id]
         return None
 
-    async def prompt_bot(self, inputs: list, temperature=None, freq_pen=None, model=None):
+    async def prompt_bot(self, inputs: list, system_inputs: list = None, temperature=None, freq_pen=None, model=None):
         # gpt_chatlog is a list of
         #   dict openai json messages,
         #   strings (which will be user messages),
         #   or another list of one of the above
-        gpt_input = GPTHelper.buildGPTMessageLog(*inputs)
+        gpt_input = GPTHelper.buildGPTMessageLog(*inputs, system=system_inputs)
         logger.debug(f"{gpt_input}")
         response_str = (await GPTHelper.promptGPT(gpt_input, temperature, freq_pen, model))["string"]
 

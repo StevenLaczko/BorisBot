@@ -176,6 +176,7 @@ Joyful because Boris was finally able to finish his crossword puzzle
 """
 
 TEMPERATURE = settings.chat_temperature
+MODEL = "gpt-3.5-turbo-0613"
 FREQ_PENALTY = 1
 PRES_PENALTY = 1
 REMEMBER_TEMPERATURE = 0
@@ -191,7 +192,7 @@ async def promptGPT(gpt_messages, temperature=None, presence_penalty=None, frequ
     if not frequency_penalty:
         frequency_penalty = FREQ_PENALTY
     if not model:
-        model = "gpt-3.5-turbo"
+        model = MODEL
     response = await asyncio.wait_for(openai.ChatCompletion.acreate(
         model=model,
         messages=gpt_messages,
@@ -363,8 +364,11 @@ def getMemoryString(memory: list[str]) -> str:
     return memory_str
 
 
-def buildGPTMessageLog(*args):
+def buildGPTMessageLog(*args, system=None):
     result = []
+    if system:
+        for a in system:
+            result.extend(createGPTMessage(a), Role.SYSTEM)
     for a in args:
         result.extend(createGPTMessage(a))
     return result
