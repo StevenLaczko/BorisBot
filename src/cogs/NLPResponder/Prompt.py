@@ -3,6 +3,7 @@ from typing import Union
 from src.helpers.logging_config import logger
 
 from src.cogs.NLPResponder.Context import Context
+from src.cogs.NLPResponder.GPTHelper import Role
 
 
 class Prompt:
@@ -29,10 +30,17 @@ class Prompt:
                 else:
                     self.prompt_dict[k]["CONTENT"] += '\n' + new_content
 
-    def get_prompt(self, dynamic_prompts: Union[dict, None] = None) -> str:
+    # in contexts, prompts default to system prompts
+    def get_prompt_str(self, role: Role, dynamic_prompts: Union[dict, None] = None) -> str:
         result = []
         for k, v in self.prompt_dict.items():
             content = None
+            # no ROLE in context entry implies system message
+            if "ROLE" not in v and role != Role.SYSTEM:
+                continue
+            elif "ROLE" in v and v["ROLE"].lower() != role.value:
+                continue
+
             if "CONTENT" in v:
                 content = v["CONTENT"]
             if k == "COMMANDS" and content:
@@ -49,3 +57,6 @@ class Prompt:
                 result.append(content)
         r = '\n'.join(result)
         return r
+
+    def get_prompt(self, dynamic_prompts: Union[dict, None] = None) -> (str, str):
+        return self.get_prompt_str(Role.SYSTEM, dynamic_prompts=dynamic_prompts), self.get_prompt_str(Role.USER, dynamic_prompts=dynamic_prompts)
