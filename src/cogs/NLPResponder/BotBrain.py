@@ -141,20 +141,20 @@ class BotBrain:
             "GOAL_INFO": f"Current goal: {conversation.goal}" if conversation.goal else "Current goal: Chat"
         }
         sys_prompt, user_prompt = prompt.get_prompt(dynamic_prompts)
-        bot_sys_input = [sys_prompt]
-        bot_user_input = [user_prompt]
-        bot_user_input.extend(gpt_chatlog)
+        llm_sys_input = [sys_prompt]
+        llm_user_input = [user_prompt]
+        llm_user_input.extend(gpt_chatlog)
         assistant_response_respond_prepend = ""
         if len(assistant_response_respond_prepend) > 0:
-            user_inputs.extend(GPTHelper.createGPTMessage(assistant_response_respond_prepend, GPTHelper.Role.ASSISTANT))
+            llm_user_input.extend(GPTHelper.createGPTMessage(assistant_response_respond_prepend, GPTHelper.Role.ASSISTANT))
 
-        prompt_str = bot_user_input[0] + '\n' + bot_sys_input[0] + '\n'.join([str(x) for x in gpt_chatlog])
+        prompt_str = llm_user_input[0] + '\n' + llm_sys_input[0] + '\n'.join([str(x) for x in gpt_chatlog])
         logger.debug("PROMPT START")
         logger.debug(prompt_str)
         logger.debug("PROMPT END")
         try:
             async with message.channel.typing():
-                response_str = await self.prompt_bot(bot_user_input, system_inputs=bot_sys_input)
+                response_str = await self.prompt_bot(llm_user_input, system_inputs=llm_sys_input)
         except (GPTExceptions.ContextLimitException, asyncio.TimeoutError, requests.RequestException) as e:
             # Log the exception details
             logger.error(f"Exception of type {type(e).__name__} occurred: {str(e)}")
