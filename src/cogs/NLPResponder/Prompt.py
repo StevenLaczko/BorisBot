@@ -36,9 +36,9 @@ class Prompt:
         for k, v in self.prompt_dict.items():
             content = None
             # no ROLE in context entry implies system message
-            if "ROLE" not in v and v["ROLE"] != str(Role.SYSTEM):
+            if "ROLE" not in v and role != Role.SYSTEM:
                 continue
-            elif "ROLE" in v and v["ROLE"] != str(role):
+            elif "ROLE" in v and v["ROLE"].lower() != role.value:
                 continue
 
             if "CONTENT" in v:
@@ -56,8 +56,7 @@ class Prompt:
             else:
                 result.append(content)
         r = '\n'.join(result)
+        return r
 
-
-
-    def get_prompt(self, dynamic_prompts: Union[dict, None] = None) -> str:
-        return self.get_prompt_str(Role.SYSTEM), self.get_prompt_str(Role.USER)
+    def get_prompt(self, dynamic_prompts: Union[dict, None] = None) -> (str, str):
+        return self.get_prompt_str(Role.SYSTEM, dynamic_prompts=dynamic_prompts), self.get_prompt_str(Role.USER, dynamic_prompts=dynamic_prompts)
