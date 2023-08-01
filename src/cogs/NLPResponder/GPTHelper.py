@@ -368,7 +368,7 @@ def buildGPTMessageLog(*args, system=None):
     result = []
     if system:
         for a in system:
-            result.extend(createGPTMessage(a), Role.SYSTEM)
+            result.extend(createGPTMessage(a, Role.SYSTEM))
     for a in args:
         result.extend(createGPTMessage(a))
     return result
