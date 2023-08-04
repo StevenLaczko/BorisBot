@@ -73,7 +73,7 @@ def init_hnsw():
 
 
 class MemoryPool:
-    def __init__(self, save_path="data/", memory_file_path=None, hnsw_file_path=None, memory_list_init_path=None,
+    def __init__(self, save_path="", memory_file_path=None, hnsw_file_path=None, memory_list_init_path=None,
                  clear_duplicated_memories=False):
         """
         MemoryPool() -> empty memory pool
