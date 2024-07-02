@@ -45,7 +45,7 @@ class Conversation:
         logger.warning("Message received in convo channel")
         self.timestamp = datetime.datetime.now()
         if self.num_msg_since_response >= self.get_num_users():
-            logger.info(f"msgs since response: {self.num_msg_since_response}\nnum users in convo: {self.get_num_users()}")
+            logger.info(f"msgs since response: {self.num_msg_since_response}\nnum users in convo: {self.get_num_users()}\nResponding.")
             return True
         return False
 
