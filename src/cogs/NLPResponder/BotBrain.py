@@ -3,7 +3,6 @@ import json
 import os
 from datetime import datetime, timedelta
 from typing import Union
-
 import discord
 import requests
 
@@ -20,6 +19,9 @@ from src.helpers.Settings import settings
 from src.cogs.NLPResponder.Conversation import Conversation
 from src.helpers.DiscordBot import DiscordBot
 from src.helpers.logging_config import logger
+
+import sys
+sys.path.insert(0, './discord.py')
 
 
 class BotBrain:
@@ -41,7 +43,7 @@ class BotBrain:
         :param context_files:
         :param commands:
         :param memory_file_path:
-        :param memory_list_init:
+        :param memory_list_init: a newline separated list of strings to initialize the bot's memory with
         :param hnsw_file_path:
         """
         self.bot: DiscordBot = bot
