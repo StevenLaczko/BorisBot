@@ -41,6 +41,7 @@ class Settings:
         self._opus = self._config["opus"]
         self._api_timeout = self._config["api_timeout"]
         self._chat_temperature = self._config["chat_temperature"]
+        self._tts = self._config["tts"]
 
     @property
     def id_name_dict(self):
@@ -93,5 +94,9 @@ class Settings:
     @property
     def chat_temperature(self):
         return self._chat_temperature
+
+    @property
+    def tts(self):
+        return self._tts
 
 settings = Settings()

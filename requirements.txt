@@ -13,3 +13,4 @@ opuslib
 PyNaCl
 scipy
 pydub
+pyttsx3
