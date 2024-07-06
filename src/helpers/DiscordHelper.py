@@ -13,7 +13,7 @@ async def getContext(channel, before,
                      time_cutoff: timedelta = None,
                      num_messages_requested=None,
                      max_context_words=None,
-                     ignore_list=None):
+                     ignore_list=None) -> list[discord.Message]:
     # set after to None to only limit context grabbing by number of words/messages (gets lots of context for first message)
     now = datetime.now(pytz.UTC)
     if not after and time_cutoff:
