@@ -7,7 +7,7 @@ import discord
 import requests
 
 from src import GPTExceptions
-from src.cogs.NLPResponder import DiscordHelper, GPTHelper
+from src.helpers import GPTHelper, DiscordHelper
 from src.cogs.NLPResponder.Memory.MemoryManager import MemoryManager
 from src.cogs.NLPResponder.commands.BotCommands import BotCommands
 from src.cogs.NLPResponder.Context import Context
@@ -160,7 +160,8 @@ class BotBrain:
         llm_user_input.extend(gpt_chatlog)
         assistant_response_respond_prepend = ""
         if len(assistant_response_respond_prepend) > 0:
-            llm_user_input.extend(GPTHelper.createGPTMessage(assistant_response_respond_prepend, GPTHelper.Role.ASSISTANT))
+            llm_user_input.extend(
+                GPTHelper.createGPTMessage(assistant_response_respond_prepend, GPTHelper.Role.ASSISTANT))
 
         prompt_str = llm_user_input[0] + '\n' + llm_sys_input[0] + '\n'.join([str(x) for x in gpt_chatlog])
         logger.debug("PROMPT START")

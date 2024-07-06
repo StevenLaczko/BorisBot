@@ -1,7 +1,7 @@
 import datetime
 import discord
 
-from src.cogs.NLPResponder import GPTHelper
+from src.helpers import GPTHelper
 from src.cogs.NLPResponder.Context import Context
 from src.cogs.NLPResponder.ContextStack import ContextStack
 from src.helpers.logging_config import logger
