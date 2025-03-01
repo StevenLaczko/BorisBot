@@ -176,7 +176,7 @@ Joyful because Boris was finally able to finish his crossword puzzle
 """
 
 TEMPERATURE = settings.chat_temperature
-MODEL = "gpt-3.5-turbo-0613"
+MODEL = "gpt-4o"
 FREQ_PENALTY = 1
 PRES_PENALTY = 1
 REMEMBER_TEMPERATURE = 0
