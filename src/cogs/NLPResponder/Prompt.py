@@ -1,9 +1,7 @@
 from typing import Union
 
-from src.helpers.logging_config import logger
-
 from src.cogs.NLPResponder.Context import Context
-from src.cogs.NLPResponder.GPTHelper import Role
+from src.helpers.GPTHelper import Role
 
 
 class Prompt:

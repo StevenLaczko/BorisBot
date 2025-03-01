@@ -3,12 +3,11 @@ import json
 import os
 from datetime import datetime, timedelta
 from typing import Union
-
 import discord
 import requests
 
 from src import GPTExceptions
-from src.cogs.NLPResponder import DiscordHelper, GPTHelper
+from src.helpers import GPTHelper, DiscordHelper
 from src.cogs.NLPResponder.Memory.MemoryManager import MemoryManager
 from src.cogs.NLPResponder.commands.BotCommands import BotCommands
 from src.cogs.NLPResponder.Context import Context
@@ -20,6 +19,9 @@ from src.helpers.Settings import settings
 from src.cogs.NLPResponder.Conversation import Conversation
 from src.helpers.DiscordBot import DiscordBot
 from src.helpers.logging_config import logger
+
+import sys
+sys.path.insert(0, './discord.py')
 
 
 class BotBrain:
@@ -41,7 +43,7 @@ class BotBrain:
         :param context_files:
         :param commands:
         :param memory_file_path:
-        :param memory_list_init:
+        :param memory_list_init: a newline separated list of strings to initialize the bot's memory with
         :param hnsw_file_path:
         """
         self.bot: DiscordBot = bot
@@ -158,7 +160,8 @@ class BotBrain:
         llm_user_input.extend(gpt_chatlog)
         assistant_response_respond_prepend = ""
         if len(assistant_response_respond_prepend) > 0:
-            llm_user_input.extend(GPTHelper.createGPTMessage(assistant_response_respond_prepend, GPTHelper.Role.ASSISTANT))
+            llm_user_input.extend(
+                GPTHelper.createGPTMessage(assistant_response_respond_prepend, GPTHelper.Role.ASSISTANT))
 
         prompt_str = llm_user_input[0] + '\n' + llm_sys_input[0] + '\n'.join([str(x) for x in gpt_chatlog])
         logger.debug("PROMPT START")

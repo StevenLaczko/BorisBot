@@ -304,7 +304,7 @@ def getContextGPTMix(bot, messages: list[discord.Message], conversation, id_name
                                      bot_name=bot_name,
                                      bot_prepend_str=bot_prepend_str) + '\n'
 
-    if len(log_str) != chatlog_start:
+    if log_str != chatlog_start:
         log_str += "```"
         result.append(log_str)
 

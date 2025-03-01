@@ -36,7 +36,6 @@ class Boris(DiscordBot.DiscordBot):
 
         self.event(self.on_member_join)
 
-    # override parent class
     async def on_ready(self):
         await super().on_ready()
         await self.load_extensions(EXTENSIONS)

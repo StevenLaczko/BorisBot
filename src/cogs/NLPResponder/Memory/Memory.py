@@ -1,13 +1,11 @@
 import datetime
 import json
-import math
 import uuid
 from copy import deepcopy
 
 from scipy.spatial.distance import cosine
 
-from src.cogs.NLPResponder import GPTHelper
-from src.cogs.NLPResponder.GPTHelper import getEmbedding
+from src.helpers.GPTHelper import getEmbedding
 from src.helpers.logging_config import logger
 
 

@@ -1,7 +1,7 @@
 import datetime
 import discord
 
-from src.cogs.NLPResponder import GPTHelper
+from src.helpers import GPTHelper
 from src.cogs.NLPResponder.Context import Context
 from src.cogs.NLPResponder.ContextStack import ContextStack
 from src.helpers.logging_config import logger
@@ -45,7 +45,7 @@ class Conversation:
         logger.warning("Message received in convo channel")
         self.timestamp = datetime.datetime.now()
         if self.num_msg_since_response >= self.get_num_users():
-            logger.info(f"msgs since response: {self.num_msg_since_response}\nnum users in convo: {self.get_num_users()}")
+            logger.info(f"msgs since response: {self.num_msg_since_response}\nnum users in convo: {self.get_num_users()}\nResponding.")
             return True
         return False
 

@@ -39,14 +39,14 @@ class NLPResponder(commands.Cog):
 
     # EVENTS
 
-    # on_message listens for incoming messages starting with an @(botname) and then responds to them
+    # on_message listens for incoming messages and decides whether to respond to them
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         current_convo = self.bot_brain.get_message_conversation(message)
         if current_convo:
             current_convo.num_msg_since_response += 1
 
-        # consider conversations over after 3 minutes of boris not responding
+        # consider conversations over after CONVO_END_DELAY of boris not responding
         conversationsToStop = []
         now = datetime.datetime.now()
         for c in self.bot_brain.currentConversations:
@@ -102,7 +102,7 @@ class NLPResponder(commands.Cog):
     #     await self.bot_brain.
 
     @commands.is_owner()
-    @commands.command(name="listmemories", help="listmemories <num memories, default 10> <newest, default/oldest>")
+    @commands.command(name="listmemories", help="listmemories <10 (default)> <newest (default) | oldest>")
     async def list_memories(self, ctx, num_mems=10, order="newest"):
         if not isinstance(num_mems, int):
             await ctx.channel.send("The first argument needs to be an integer.")
